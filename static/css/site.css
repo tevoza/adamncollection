@@ -1,13 +1,14 @@
 :root {
-  --bg: #f4efe7;
-  --bg-accent: #e6dccd;
-  --surface: rgba(255, 252, 247, 0.9);
-  --text: #1f1a17;
-  --muted: #6d6257;
-  --line: rgba(31, 26, 23, 0.14);
-  --accent: #9d3c22;
-  --accent-strong: #6f2512;
-  --shadow: 0 20px 60px rgba(77, 54, 30, 0.08);
+  --bg: #08111f;
+  --bg-accent: #13233b;
+  --surface: rgba(11, 21, 37, 0.84);
+  --surface-strong: rgba(16, 31, 52, 0.96);
+  --text: #ebf1ff;
+  --muted: #9baeca;
+  --line: rgba(173, 197, 234, 0.16);
+  --accent: #7dd3fc;
+  --accent-strong: #c084fc;
+  --shadow: 0 24px 80px rgba(1, 6, 16, 0.42);
   --content-width: 72rem;
   --measure: 66ch;
 }
@@ -24,20 +25,22 @@ body {
   margin: 0;
   color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(157, 60, 34, 0.14), transparent 30%),
-    linear-gradient(180deg, var(--bg) 0%, #f8f4ee 100%);
-  font-family: Georgia, "Times New Roman", serif;
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.14), transparent 28%),
+    radial-gradient(circle at top right, rgba(192, 132, 252, 0.12), transparent 24%),
+    linear-gradient(180deg, #050b14 0%, var(--bg) 50%, #0b1830 100%);
+  font-family: "Georgia", "Times New Roman", serif;
   line-height: 1.7;
+  min-height: 100vh;
 }
 
 a {
   color: inherit;
-  text-decoration-color: rgba(157, 60, 34, 0.45);
+  text-decoration-color: rgba(125, 211, 252, 0.45);
   text-underline-offset: 0.2em;
 }
 
 a:hover {
-  color: var(--accent-strong);
+  color: var(--accent);
 }
 
 img {
@@ -55,7 +58,7 @@ pre {
   overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: 1rem;
-  background: #fffaf3;
+  background: rgba(6, 14, 26, 0.92);
 }
 
 blockquote {
@@ -87,7 +90,7 @@ blockquote {
   margin-top: 0.5rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: var(--surface);
+  background: rgba(8, 17, 31, 0.75);
   backdrop-filter: blur(18px);
   box-shadow: var(--shadow);
   padding: 0.9rem 1.25rem;
@@ -109,6 +112,11 @@ blockquote {
   color: var(--muted);
 }
 
+.site-nav a:hover,
+.site-title:hover {
+  color: var(--accent);
+}
+
 .site-main {
   padding-top: 3rem;
 }
@@ -118,7 +126,7 @@ blockquote {
 .post,
 .post-list,
 .home-copy {
-  background: var(--surface);
+  background: linear-gradient(180deg, var(--surface-strong), var(--surface));
   border: 1px solid var(--line);
   border-radius: 1.5rem;
   box-shadow: var(--shadow);
@@ -128,8 +136,17 @@ blockquote {
 .page-intro,
 .home-copy,
 .post-list,
-.post {
+.post,
+.section-grid {
   padding: 2rem;
+}
+
+.section-grid {
+  margin-top: 1.5rem;
+  background: linear-gradient(180deg, rgba(12, 24, 42, 0.96), rgba(10, 20, 35, 0.82));
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  box-shadow: var(--shadow);
 }
 
 .hero h1,
@@ -152,7 +169,8 @@ blockquote {
 .home-copy,
 .post-list,
 .post,
-.page-intro {
+.page-intro,
+.section-grid {
   margin-top: 1.5rem;
 }
 
@@ -181,11 +199,56 @@ blockquote {
   margin-bottom: 1.5rem;
 }
 
+.section-heading p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.feature-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.feature-card {
+  padding: 1.25rem;
+  border-radius: 1.2rem;
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(circle at top right, rgba(125, 211, 252, 0.1), transparent 35%),
+    rgba(8, 16, 29, 0.72);
+}
+
+.feature-card h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.45rem;
+  line-height: 1.05;
+}
+
+.feature-card p:last-child {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
 .section-heading h2,
 .post-card h2,
 .post-card h3 {
   margin: 0;
   line-height: 1.1;
+}
+
+.post-kicker {
+  margin: 0 0 0.35rem;
+  color: var(--accent);
+  font-family: Arial, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.post-kicker a {
+  text-decoration: none;
 }
 
 .post-card + .post-card {
@@ -211,7 +274,7 @@ blockquote {
   padding: 0.35rem 0.65rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: #fffaf3;
+  background: rgba(6, 14, 26, 0.88);
   color: var(--muted);
   font-family: Arial, sans-serif;
   font-size: 0.85rem;
@@ -239,11 +302,16 @@ blockquote {
     flex-wrap: wrap;
   }
 
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+
   .hero,
   .page-intro,
   .home-copy,
   .post-list,
-  .post {
+  .post,
+  .section-grid {
     padding: 1.25rem;
   }
 }

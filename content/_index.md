@@ -1,14 +1,15 @@
 ---
 title: "Home"
-description: "A small corner of the internet for notes and essays."
+description: "A small corner of the internet for software notes, essays, and food writing."
 ---
 
 I am Adam.
 
-This blog is where I write about:
+This site is split into a few clear sections:
 
 - programming
-- running
-- systems thinking
+- thoughts
+- food
+- book reviews
 
-Start with the latest posts or browse the archive.
+Start with a section, or browse the latest writing across everything.

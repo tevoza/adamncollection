@@ -1,12 +1,12 @@
-baseURL = "https://yourusername.github.io/adamncollection/"
+baseURL = "https://tevoza.github.io/adamncollection/"
 languageCode = "en-us"
-title = "Adam's Notes"
+title = "adamncollection"
 enableRobotsTXT = true
 
 [params]
   author = "Adam"
-  description = "A minimal Hugo blog about programming, running, and systems thinking."
-  githubRepo = "https://github.com/yourusername/adamncollection"
+  description = "Notes on software, thoughts, and food."
+  githubRepo = "https://github.com/tevoza/adamncollection"
 
 [outputs]
   home = ["HTML", "RSS"]
@@ -22,9 +22,29 @@ enableRobotsTXT = true
     weight = 1
 
   [[menu.main]]
-    name = "Posts"
-    url = "/posts/"
+    name = "Software"
+    url = "/software/"
     weight = 2
+
+  [[menu.main]]
+    name = "Thoughts"
+    url = "/thoughts/"
+    weight = 3
+
+  [[menu.main]]
+    name = "Food"
+    url = "/food/"
+    weight = 4
+
+  [[menu.main]]
+    name = "Book Reviews"
+    url = "/book-reviews/"
+    weight = 5
+
+  [[menu.main]]
+    name = "All Posts"
+    url = "/posts/"
+    weight = 6
 
 [taxonomies]
   tag = "tags"

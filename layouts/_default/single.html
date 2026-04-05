@@ -1,6 +1,9 @@
 {{ define "main" }}
   <article class="post">
     <header class="post-header">
+      {{ with .CurrentSection }}
+        <p class="post-kicker"><a href="{{ .RelPermalink }}">{{ .Title }}</a></p>
+      {{ end }}
       <p class="eyebrow">{{ .Date.Format "January 2, 2006" }}</p>
       <h1>{{ .Title }}</h1>
       {{ with .Description }}

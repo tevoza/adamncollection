@@ -1,6 +1,8 @@
 {{ define "main" }}
   <section class="page-intro">
-    <p class="eyebrow">Section</p>
+    <p class="eyebrow">
+      {{ if .IsSection }}Section{{ else }}Browse{{ end }}
+    </p>
     <h1>{{ .Title }}</h1>
     {{ with .Content }}
       <div class="lede">{{ . }}</div>
@@ -8,8 +10,14 @@
   </section>
 
   <section class="post-list">
+    <div class="section-heading">
+      <h2>
+        {{ len .Pages }} {{ if eq (len .Pages) 1 }}entry{{ else }}entries{{ end }}
+      </h2>
+    </div>
     {{ range .Pages.ByDate.Reverse }}
       <article class="post-card">
+        <p class="post-kicker">{{ .Section }}</p>
         <p class="post-meta">{{ .Date.Format "January 2, 2006" }}</p>
         <h2><a href="{{ .RelPermalink }}">{{ .Title }}</a></h2>
         {{ with .Description }}

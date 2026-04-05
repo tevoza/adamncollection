@@ -1,6 +1,6 @@
 {{ define "main" }}
   <section class="hero">
-    <p class="eyebrow">Minimal Hugo Blog</p>
+    <p class="eyebrow">Sectioned Hugo Site</p>
     <h1>{{ .Site.Title }}</h1>
     <p class="hero-copy">{{ .Site.Params.description }}</p>
   </section>
@@ -9,14 +9,36 @@
     {{ .Content }}
   </section>
 
-  <section class="post-list">
+  <section class="section-grid" aria-label="Site sections">
     <div class="section-heading">
-      <h2>Latest Posts</h2>
-      <a href="{{ "/posts/" | relURL }}">View all</a>
+      <h2>Browse By Section</h2>
+      <p>Each section gets its own page, feed of entries, and writing style.</p>
     </div>
 
-    {{ range first 5 (where .Site.RegularPages "Section" "posts").ByDate.Reverse }}
+    <div class="feature-grid">
+      {{ range slice "software" "thoughts" "food" "book-reviews" }}
+        {{ $section := . }}
+        {{ with site.GetPage $section }}
+          {{ $count := len (where site.RegularPages "Section" $section) }}
+          <article class="feature-card">
+            <p class="eyebrow">{{ printf "%02d" $count }} entries</p>
+            <h3><a href="{{ .RelPermalink }}">{{ .Title }}</a></h3>
+            <p>{{ .Description }}</p>
+          </article>
+        {{ end }}
+      {{ end }}
+    </div>
+  </section>
+
+  <section class="post-list">
+    <div class="section-heading">
+      <h2>Latest Writing</h2>
+      <a href="{{ "/posts/" | relURL }}">Archive</a>
+    </div>
+
+    {{ range first 6 .Site.RegularPages.ByDate.Reverse }}
       <article class="post-card">
+        <p class="post-kicker">{{ .Section }}</p>
         <p class="post-meta">{{ .Date.Format "January 2, 2006" }}</p>
         <h3><a href="{{ .RelPermalink }}">{{ .Title }}</a></h3>
         {{ with .Description }}
