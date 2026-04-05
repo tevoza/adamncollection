@@ -1,0 +1,249 @@
+:root {
+  --bg: #f4efe7;
+  --bg-accent: #e6dccd;
+  --surface: rgba(255, 252, 247, 0.9);
+  --text: #1f1a17;
+  --muted: #6d6257;
+  --line: rgba(31, 26, 23, 0.14);
+  --accent: #9d3c22;
+  --accent-strong: #6f2512;
+  --shadow: 0 20px 60px rgba(77, 54, 30, 0.08);
+  --content-width: 72rem;
+  --measure: 66ch;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(157, 60, 34, 0.14), transparent 30%),
+    linear-gradient(180deg, var(--bg) 0%, #f8f4ee 100%);
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.7;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: rgba(157, 60, 34, 0.45);
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  color: var(--accent-strong);
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+code,
+pre {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+pre {
+  padding: 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: #fffaf3;
+}
+
+blockquote {
+  margin: 2rem 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--accent);
+  color: var(--muted);
+}
+
+.page-shell {
+  width: min(calc(100% - 2rem), var(--content-width));
+  margin: 0 auto;
+  padding: 1rem 0 4rem;
+}
+
+.site-header,
+.site-footer {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 0;
+}
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin-top: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
+  padding: 0.9rem 1.25rem;
+}
+
+.site-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.site-nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.site-nav a {
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.site-main {
+  padding-top: 3rem;
+}
+
+.hero,
+.page-intro,
+.post,
+.post-list,
+.home-copy {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  box-shadow: var(--shadow);
+}
+
+.hero,
+.page-intro,
+.home-copy,
+.post-list,
+.post {
+  padding: 2rem;
+}
+
+.hero h1,
+.page-intro h1,
+.post-header h1 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(2.4rem, 8vw, 4.8rem);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+.hero-copy,
+.lede,
+.post-description {
+  max-width: var(--measure);
+  font-size: 1.15rem;
+  color: var(--muted);
+}
+
+.home-copy,
+.post-list,
+.post,
+.page-intro {
+  margin-top: 1.5rem;
+}
+
+.home-copy > *,
+.post-content > *,
+.lede > * {
+  max-width: var(--measure);
+}
+
+.eyebrow,
+.post-meta {
+  margin: 0 0 0.75rem;
+  font-family: Arial, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.section-heading h2,
+.post-card h2,
+.post-card h3 {
+  margin: 0;
+  line-height: 1.1;
+}
+
+.post-card + .post-card {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.post-card p:last-child {
+  margin-bottom: 0;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  list-style: none;
+  padding: 0;
+  margin: 1.25rem 0 0;
+}
+
+.tag-list li {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fffaf3;
+  color: var(--muted);
+  font-family: Arial, sans-serif;
+  font-size: 0.85rem;
+}
+
+.site-footer {
+  margin-top: 2rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+@media (max-width: 720px) {
+  .page-shell {
+    width: min(calc(100% - 1rem), var(--content-width));
+  }
+
+  .site-header,
+  .site-footer,
+  .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .site-nav {
+    flex-wrap: wrap;
+  }
+
+  .hero,
+  .page-intro,
+  .home-copy,
+  .post-list,
+  .post {
+    padding: 1.25rem;
+  }
+}

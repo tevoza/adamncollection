@@ -1,0 +1,32 @@
+{{ define "main" }}
+  <section class="hero">
+    <p class="eyebrow">Minimal Hugo Blog</p>
+    <h1>{{ .Site.Title }}</h1>
+    <p class="hero-copy">{{ .Site.Params.description }}</p>
+  </section>
+
+  <section class="home-copy">
+    {{ .Content }}
+  </section>
+
+  <section class="post-list">
+    <div class="section-heading">
+      <h2>Latest Posts</h2>
+      <a href="{{ "/posts/" | relURL }}">View all</a>
+    </div>
+
+    {{ range first 5 (where .Site.RegularPages "Section" "posts").ByDate.Reverse }}
+      <article class="post-card">
+        <p class="post-meta">{{ .Date.Format "January 2, 2006" }}</p>
+        <h3><a href="{{ .RelPermalink }}">{{ .Title }}</a></h3>
+        {{ with .Description }}
+          <p>{{ . }}</p>
+        {{ else }}
+          <p>{{ .Summary }}</p>
+        {{ end }}
+      </article>
+    {{ else }}
+      <p>No posts yet.</p>
+    {{ end }}
+  </section>
+{{ end }}

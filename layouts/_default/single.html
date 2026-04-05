@@ -1,0 +1,22 @@
+{{ define "main" }}
+  <article class="post">
+    <header class="post-header">
+      <p class="eyebrow">{{ .Date.Format "January 2, 2006" }}</p>
+      <h1>{{ .Title }}</h1>
+      {{ with .Description }}
+        <p class="post-description">{{ . }}</p>
+      {{ end }}
+      {{ with .Params.tags }}
+        <ul class="tag-list" aria-label="Tags">
+          {{ range . }}
+            <li>{{ . }}</li>
+          {{ end }}
+        </ul>
+      {{ end }}
+    </header>
+
+    <div class="post-content">
+      {{ .Content }}
+    </div>
+  </article>
+{{ end }}

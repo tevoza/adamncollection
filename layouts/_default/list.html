@@ -1,0 +1,25 @@
+{{ define "main" }}
+  <section class="page-intro">
+    <p class="eyebrow">Section</p>
+    <h1>{{ .Title }}</h1>
+    {{ with .Content }}
+      <div class="lede">{{ . }}</div>
+    {{ end }}
+  </section>
+
+  <section class="post-list">
+    {{ range .Pages.ByDate.Reverse }}
+      <article class="post-card">
+        <p class="post-meta">{{ .Date.Format "January 2, 2006" }}</p>
+        <h2><a href="{{ .RelPermalink }}">{{ .Title }}</a></h2>
+        {{ with .Description }}
+          <p>{{ . }}</p>
+        {{ else }}
+          <p>{{ .Summary }}</p>
+        {{ end }}
+      </article>
+    {{ else }}
+      <p>No posts yet.</p>
+    {{ end }}
+  </section>
+{{ end }}

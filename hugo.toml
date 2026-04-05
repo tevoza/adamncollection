@@ -1,0 +1,30 @@
+baseURL = "https://yourusername.github.io/adamncollection/"
+languageCode = "en-us"
+title = "Adam's Notes"
+enableRobotsTXT = true
+
+[params]
+  author = "Adam"
+  description = "A minimal Hugo blog about programming, running, and systems thinking."
+  githubRepo = "https://github.com/yourusername/adamncollection"
+
+[outputs]
+  home = ["HTML", "RSS"]
+
+[markup]
+  [markup.highlight]
+    noClasses = false
+
+[menu]
+  [[menu.main]]
+    name = "Home"
+    url = "/"
+    weight = 1
+
+  [[menu.main]]
+    name = "Posts"
+    url = "/posts/"
+    weight = 2
+
+[taxonomies]
+  tag = "tags"
