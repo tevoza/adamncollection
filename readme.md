@@ -101,7 +101,7 @@ Then edit the file in `content/posts/`.
 1. Create a GitHub repo and push this project to the `main` branch.
 2. In GitHub, open `Settings` -> `Pages`.
 3. Set `Source` to `GitHub Actions`.
-4. Push to `main` again if needed.
+4. Push to `main` again if needed!
 
 The workflow file is [hugo.yml](/home/adam/projects/adamncollection/.github/workflows/hugo.yml).
 
