@@ -6,5 +6,7 @@ tags: []
 description: ""
 ---
 
-Is it manipulative?
-Seems a logical knee-jerk reaction to think it would be.
+It is with some arrogance that I brush things off as 'obvious' or 'straightforward'.
+There is a lot about which I know little.
+But this is fine as long as there is at least a little about which I know a lot.
+The latter is a minimum requirement to be of value and worth in society - Phew.

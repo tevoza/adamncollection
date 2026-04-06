@@ -16,10 +16,27 @@ This repo is now set up as a minimal Hugo blog that can deploy to GitHub Pages w
 ├── .github/workflows/hugo.yml
 ├── archetypes/default.md
 ├── content/
+│   ├── software/
+│   ├── thoughts/
+│   ├── food/
+│   └── book-reviews/
 ├── layouts/
 ├── static/css/site.css
 └── hugo.toml
 ```
+
+## Content Sections
+
+This site is organized into Hugo sections.
+
+Each top-level folder inside `content/` becomes its own section with its own list page:
+
+- `content/software/` -> `/software/`
+- `content/thoughts/` -> `/thoughts/`
+- `content/food/` -> `/food/`
+- `content/book-reviews/` -> `/book-reviews/`
+
+This makes it easy to keep different kinds of writing separate while still showing recent writing together on the homepage.
 
 ## 1. Install Hugo
 
@@ -88,13 +105,33 @@ Open `http://localhost:1313`.
 
 ## 4. Write Posts
 
-Create a post:
+Create a post inside a section:
 
 ```bash
-hugo new posts/my-post.md
+hugo new content software/my-post.md
 ```
 
-Then edit the file in `content/posts/`.
+You can also create posts in other sections:
+
+```bash
+hugo new content thoughts/my-essay.md
+hugo new content food/weeknight-pasta.md
+hugo new content book-reviews/how-to-win-friends-and-influence-people.md
+```
+
+Then edit the generated file in the matching `content/<section>/` folder.
+
+If you want the post to appear on the live site, change:
+
+```yaml
+draft: true
+```
+
+to:
+
+```yaml
+draft: false
+```
 
 ## 5. Deploy With GitHub Actions
 
@@ -119,7 +156,7 @@ git push -u origin main
 ## Daily Workflow
 
 ```bash
-hugo new posts/my-post.md
+hugo new content software/my-post.md
 hugo server -D
 git add .
 git commit -m "Add new post"
