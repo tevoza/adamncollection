@@ -3,13 +3,8 @@ title: "Home"
 description: "A small corner of the internet for software notes, essays, and food writing."
 ---
 
-I am Adam.
-
-This site is split into a few clear sections:
-
-- programming
-- thoughts
-- food
-- book reviews
-
-Start with a section, or browse the latest writing across everything.
+Why make blog?
+- Use as an oppurtunity to form opinions with solid justifications.
+Especially for finding my own answers on pressing issues.
+My answer has too often been:
+"Well, I have done no research on this topic from which I can form any real opinion."
