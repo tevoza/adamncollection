@@ -12,8 +12,16 @@ _How to Win Friends and Influence People_ by Dale Carnegie is a self-help guide 
 
 ### Handling People
 - **Don't criticize, condemn or complain.**
+Negativity, or speaking ill of things or viewpoints other people have is a solid way to ensure that they'll try to avoid you.
+A negative Nancy just leaves a sour taste in everyone's mouths.
 - **Give honest and sincere appreciation.**
 - **Arouse in the other person an eager want.**
+Invoke a felt need or emotional motivation.
+For example, let's say I was trying to convince my friend to read this book.
+I may say, 
+"You'd like to make meaningful connections with your friends and family, while also gaining their respect and recognition - right?
+I feel a big part of this lies in how you carry yourself, what you choose to say and focus on in your interactions.
+May I suggest this book which helped me consider these things?"
 
 ### Make People Like You
 
