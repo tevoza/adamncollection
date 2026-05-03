@@ -12,16 +12,14 @@ _How to Win Friends and Influence People_ by Dale Carnegie is a self-help guide 
 
 ### Handling People
 - **Don't criticize, condemn or complain.**
-Negativity, or speaking ill of things or viewpoints other people have is a solid way to ensure that they'll try to avoid you.
-A negative Nancy just leaves a sour taste in everyone's mouths.
+Criticizing people’s views is a reliable way to make them withdraw from you.
+Constant negativity leaves a sour taste in everyone’s mouth.
 - **Give honest and sincere appreciation.**
 - **Arouse in the other person an eager want.**
-Invoke a felt need or emotional motivation.
-For example, let's say I was trying to convince my friend to read this book.
-I may say, 
-"You'd like to make meaningful connections with your friends and family, while also gaining their respect and recognition - right?
-I feel a big part of this lies in how you carry yourself, what you choose to say and focus on in your interactions.
-May I suggest this book which helped me consider these things?"
+Appeal to a felt need or emotional motivation.
+For example, if I wanted to recommend this book to a friend, I might say:
+"You've mentioned wanting to build stronger connections with people.
+This book helped me think about exactly that: how to carry myself, what to focus on in conversation, and how to make people feel valued."
 
 ### Make People Like You
 
@@ -35,6 +33,7 @@ May I suggest this book which helped me consider these things?"
 ### Win People to your way of Thinking
 
 - **The only way to get the best out of an argument is to avoid it.**
+It is impossible to _win_ an argument.
 - **Show respect for the other person's opinions. Never say, "You're wrong."**
 - **If you are wrong, admit it quickly and emphatically.**
 - **Begin in a friendly way.**
@@ -45,6 +44,7 @@ May I suggest this book which helped me consider these things?"
 - **Be sympathetic to the other person's ideas and desires.**
 - **Appeal to the nobler motives.**
 - **Dramatize your ideas.**
+Employ a little showmanship to carry your point across in an interesting way.
 - **Throw down a challenge.**
 
 ### Be a Leader: How to Change People without giving offence or arousing resentment
