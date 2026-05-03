@@ -60,30 +60,37 @@ Employ a little showmanship to carry your point across in an interesting way.
 
 ## Review
 
-It is with some arrogance that I brush things off as 'obvious' or 'straightforward'.
-There is a lot about which I know little.
-But this is fine, as long as one at least knows a little about a lot.
-The latter is a minimum requirement to be of value and worth in society - Phew.
-In the former there are wide gaps filled with blindspots, often right under your nose.
-Many of the concepts felt logical and obvious.
-Although I may have understood them already (at least subconsiously), I seem to still forget or act otherwise, as though the same principles wouldn't apply to me.
-The book reminded me to strongly consider the manner in which I come across.
-It highlited some blindspots in my own interactions, which I only reflected while reading.
-- how people may feel in response to things I say
-- have I truly listened to their perspective, making them feel considered, important and welcome
-- how can I expect people to honour my needs without giving back in return
+There is a touch of arrogance in the way I sometimes dismiss things as "obvious" or "straightforward".
+Infact, it often turns out that I had been missing fundamental concepts because I had just made assumptions with little thought.
+There is so much I know little about.
+And, even when I do understand something in principle, that does not mean I apply it consistently.
+That was my main takeaway from this book.
+Many of Carnegie's ideas felt logical, and some even felt familiar, but I still noticed how often I forget them in ordinary interactions.
+It is easy to know that people want to feel heard, respected, and valued.
+It is harder to remember that while you are actually speaking to them.
+Near impossible when you are under the influence of your emotions.
+The book reminds me to pay closer attention to how I come across.
+It highlighted a few blind spots in my own interactions:
+- how people may feel in response to what I say
+- whether I have truly listened to their perspective
+- whether I make people feel considered, important, and welcome
+- whether I can expect people to honour my needs if I do not offer the same care in return
 
 ### Common Critique
 "_The points made are all common sense_"  
-Yes - maybe, but common to who?
-My brother and I don't even seem to share the same sense; nevermind complete strangers.
-I feel this expression was borne out of the natural bias we have, in that each individual experiences existence through their own perspective.
+Yes, maybe, but common to whom?
+My brother and I do not even seem to share the same sense, never mind complete strangers.
+I think this expression comes from the natural bias of assuming that our own perspective is more universal than it really is.
+Hopefully now after reading, I've gained more _common_ sense.
 
 "_Sounds manipulative, trying to win over people to get your way._"  
-Agreed.
-Carnegie requires you handle interactions in a sincere manner.
-Insincerity will be detected; people aren't idiots.  
-"You can fool some people sometimes  
-But you can't fool all the people all the time" - Bob Marley  
+Fair.
+Carnegie's advice can sound manipulative if it is used only as a technique for getting your way.
+But the book repeatedly depends on sincerity.
+If the appreciation, interest, or respect is fake, people will usually feel it.
 
-Why did I read it?
+### Conclusion
+I feel I'm better off having read this book.
+It helped me identify a few blindspots I had been missing in my interactions.
+I would recommend this to anyone interested in strengthening connections.
+It may also help you understand where your previous interactions may have gone wrong.
