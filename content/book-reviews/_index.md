@@ -5,6 +5,7 @@ description: "Notes on books, what stayed with me, and what was worth recommendi
 
 This section is for books worth thinking about after the last page:
 
-- reviews and ratings
+- summaries
 - favorite passages
+- reviews and ratings
 - ideas I want to revisit later
