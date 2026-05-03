@@ -10,6 +10,9 @@ description: ""
 
 ### The Rise of Stoicism
 - **Philosophy Takes an Interest in Life**
+There is risk that if one refuses to take on a philosophy of life, then we are likely to mislive.
+More precisely, stumble aimlessly pursuing rewards afforded to us via genetic programming; ie sex, fame, wealth and pleasure.
+A prevailing philosophy in society today seems to be "enlightened hedonism": Optimizing for pleasure while making sacrifices to keep it sustainable.
 - **The First Stoics**
 - **Roman Stoicism**
 
