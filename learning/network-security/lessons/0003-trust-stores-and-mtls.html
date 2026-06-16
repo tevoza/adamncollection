@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trust Stores and mTLS</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4efe7;
+      --card: #fffaf4;
+      --text: #1f2937;
+      --muted: #5d6673;
+      --line: #d8c7b6;
+      --accent: #0f766e;
+      --accent-2: #7c2d12;
+    }
+    body {
+      margin: 0;
+      font: 17px/1.65 Georgia, "Times New Roman", serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top right, rgba(15,118,110,.10), transparent 24%),
+        radial-gradient(circle at bottom left, rgba(124,45,18,.08), transparent 30%),
+        linear-gradient(180deg, var(--bg), #ffffff 65%);
+    }
+    main {
+      max-width: 1020px;
+      margin: 0 auto;
+      padding: 40px 20px 72px;
+    }
+    article {
+      background: var(--card);
+      border: 1px solid var(--line);
+      box-shadow: 0 24px 60px rgba(31, 41, 55, 0.10);
+      padding: 38px 42px;
+    }
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      font: 12px/1.2 system-ui, sans-serif;
+      color: var(--accent);
+      margin: 0 0 16px;
+    }
+    h1, h2, h3 { line-height: 1.1; margin: 0 0 14px; }
+    h1 { font-size: clamp(2.1rem, 4vw, 3.2rem); }
+    h2 { font-size: 1.25rem; margin-top: 30px; color: var(--accent-2); }
+    p { margin: 0 0 14px; }
+    .lede { font-size: 1.08rem; max-width: 74ch; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.05fr .95fr;
+      gap: 24px;
+      margin-top: 22px;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.55);
+      padding: 18px 18px 8px;
+    }
+    ul { margin: 0 0 14px 18px; padding: 0; }
+    li { margin: 0 0 10px; }
+    a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: .95em;
+      background: #f4efe7;
+      padding: 0 .25em;
+      border-radius: 4px;
+    }
+    pre {
+      overflow: auto;
+      background: #f7f1e8;
+      color: var(--text);
+      padding: 16px 18px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.65);
+      font: 14px/1.55 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    }
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      border-radius: 0;
+      font-size: inherit;
+    }
+    .small { color: var(--muted); font-size: .96rem; }
+    .callout {
+      border-top: 1px solid var(--line);
+      margin-top: 28px;
+      padding-top: 18px;
+      color: var(--muted);
+    }
+    @media (max-width: 860px) {
+      article { padding: 24px 18px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+    @media print {
+      body { background: white; }
+      article { box-shadow: none; border: none; padding: 0; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <article>
+      <p class="eyebrow">Lesson 3 · Enterprise Trust</p>
+      <h1>Trust Stores and mTLS</h1>
+      <p class="lede">In a corporate environment, the key question is usually not “is TLS enabled?” It is “which roots do we trust, where do they live, and how does the app prove it is allowed to talk?”</p>
+
+      <div class="grid">
+        <section class="panel">
+          <h2>Trust store mental model</h2>
+          <p>A trust store is the set of roots your OS or runtime already believes in. When a server certificate arrives, the client tries to build a chain from the leaf certificate through any intermediates to one of those trusted roots.</p>
+          <ul>
+            <li><strong>Leaf cert</strong> - the server or client identity you are checking.</li>
+            <li><strong>Intermediate cert</strong> - the CA that bridges leaf to root.</li>
+            <li><strong>Root cert</strong> - the trust anchor already installed locally.</li>
+          </ul>
+          <p class="small">.NET exposes store access through <a href="https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.x509certificates.x509store?view=net-9.0">X509Store</a> and chain validation through <a href="https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.x509certificates.x509chain?view=net-9.0">X509Chain</a>.</p>
+        </section>
+
+        <section class="panel">
+          <h2>Why internal CAs matter</h2>
+          <p>In enterprise setups, the public web CA is often not the full story. Machines may trust an internal root CA for services, VPNs, proxies, or service meshes. If that root is missing from the right store, valid internal services suddenly look broken.</p>
+          <p>That is why “works on my machine” can come down to who has the corporate root installed, and in which store.</p>
+        </section>
+      </div>
+
+      <h2>mTLS is still TLS</h2>
+      <p>Mutual TLS does not replace TLS. It adds a client certificate step so the server can authenticate the caller at the transport layer. The handshake still negotiates encryption first; then the server asks for a client cert and verifies it against the CA chain it trusts.</p>
+      <p class="small">OpenSSL’s <a href="https://docs.openssl.org/3.0/man1/openssl-s_server/">s_server</a> documents <code>-verify</code> and <code>-Verify</code> for requesting or requiring client certificates.</p>
+
+      <h2>How the pieces fit</h2>
+      <pre><code>Client -> Server
+  1. connect over TLS
+  2. server presents leaf cert + chain
+  3. client validates chain against trust store
+  4. server optionally requests client cert
+  5. client sends cert + proves private key possession
+  6. both sides derive session keys
+  7. application traffic starts</code></pre>
+
+      <h2>What .NET does</h2>
+      <p>For client certificates, <code>HttpClientHandler.ClientCertificates</code> is the collection presented to the server during certificate-based client auth. On .NET Core, the cert must have Digital Signature key usage to be used for the request.</p>
+      <p>For validation, <code>X509Chain</code> is the chain-building engine. That is the object-level place where “can I trust this certificate?” becomes a yes/no result with status flags.</p>
+
+      <h2>Debug checklist</h2>
+      <ul>
+        <li>Is the corporate root installed in the right trust store?</li>
+        <li>Did the server send the intermediate certs?</li>
+        <li>Does the hostname match the certificate SAN?</li>
+        <li>Is the client cert present, valid, and usable for digital signatures?</li>
+        <li>Is the app using the OS trust store, or its own custom trust bundle?</li>
+      </ul>
+
+      <h2>OpenSSL mTLS lab</h2>
+      <pre><code># Server requiring a client certificate
+openssl s_server -accept 8443 -cert server.pem -key server.key -Verify 1 -CAfile corp-root.pem
+
+# Client presenting a certificate
+openssl s_client -connect localhost:8443 -cert client.pem -key client.key -CAfile corp-root.pem</code></pre>
+
+      <p class="small">Use <code>-verify</code> if you want the server to ask for a client cert, and <code>-Verify</code> if you want it to require one. See the OpenSSL docs for the exact behavior.</p>
+
+      <h2>Check yourself</h2>
+      <ul>
+        <li>What is the trust store actually storing?</li>
+        <li>Why can an internal CA make everything fail at once if the root is missing?</li>
+        <li>What extra proof does mTLS add beyond ordinary HTTPS?</li>
+      </ul>
+
+      <p class="callout">Next lesson should be OAuth 2.0 and JWTs, because after transport trust comes application authorization. Ask me if you want the next step to stay enterprise-focused or to branch into token flows immediately.</p>
+    </article>
+  </main>
+</body>
+</html>

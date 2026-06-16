@@ -20,6 +20,7 @@ This repo is now set up as a minimal Hugo blog that can deploy to GitHub Pages w
 │   ├── thoughts/
 │   ├── food/
 │   └── book-reviews/
+├── learning/
 ├── layouts/
 ├── static/css/site.css
 └── hugo.toml
@@ -37,6 +38,8 @@ Each top-level folder inside `content/` becomes its own section with its own lis
 - `content/book-reviews/` -> `/book-reviews/`
 
 This makes it easy to keep different kinds of writing separate while still showing recent writing together on the homepage.
+
+The `learning/` folder is separate from the blog and is meant for trying out agent workflows, like Matt Pocock's teach-oriented skill, without publishing anything to the site.
 
 ## 1. Install Hugo
 

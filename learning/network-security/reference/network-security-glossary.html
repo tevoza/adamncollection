@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Network Security Glossary</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f2ea;
+      --paper: #fffaf2;
+      --text: #1f2937;
+      --muted: #5b6472;
+      --line: #d8c9b8;
+      --accent: #0f766e;
+      --accent-2: #7c2d12;
+    }
+    body {
+      margin: 0;
+      font: 16px/1.6 Georgia, "Times New Roman", serif;
+      color: var(--text);
+      background: linear-gradient(180deg, var(--bg), #ffffff 55%);
+    }
+    main {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 48px 24px 72px;
+    }
+    article {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      box-shadow: 0 20px 45px rgba(31, 41, 55, 0.08);
+      padding: 32px 36px;
+    }
+    h1, h2 {
+      line-height: 1.15;
+      margin: 0 0 16px;
+    }
+    h1 { font-size: 2.1rem; }
+    h2 { font-size: 1.2rem; margin-top: 28px; color: var(--accent-2); }
+    p { margin: 0 0 14px; }
+    dl { margin: 0; display: grid; grid-template-columns: 180px 1fr; gap: 10px 18px; }
+    dt { font-weight: 700; color: var(--accent); }
+    dd { margin: 0; }
+    .hint { color: var(--muted); font-size: 0.95rem; }
+    @media (max-width: 720px) {
+      article { padding: 24px 18px; }
+      dl { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <article>
+      <h1>Network Security Glossary</h1>
+      <p class="hint">Use this sheet to keep the vocabulary straight while learning TLS, certificates, and auth flows.</p>
+
+      <h2>Core Terms</h2>
+      <dl>
+        <dt>TLS</dt>
+        <dd>Transport security for a connection: confidentiality, integrity, and server authentication.</dd>
+
+        <dt>HTTPS</dt>
+        <dd>HTTP carried over TLS.</dd>
+
+        <dt>mTLS</dt>
+        <dd>Mutual TLS: both client and server present certificates.</dd>
+
+        <dt>Certificate</dt>
+        <dd>A signed document that binds an identity to a public key.</dd>
+
+        <dt>Private key</dt>
+        <dd>The secret used to prove ownership of the public key in the certificate.</dd>
+
+        <dt>Public key</dt>
+        <dd>The shareable half of a key pair that others use to verify signatures or encrypt to you.</dd>
+
+        <dt>CSR</dt>
+        <dd>Certificate Signing Request: a signed request for a CA to issue a certificate.</dd>
+
+        <dt>CA</dt>
+        <dd>Certificate Authority: an entity you trust to sign certificates.</dd>
+
+        <dt>Trust store</dt>
+        <dd>The collection of trusted root certificates your OS or runtime uses for chain validation.</dd>
+
+        <dt>OAuth 2.0</dt>
+        <dd>An authorization framework for scoped access to APIs.</dd>
+
+        <dt>JWT</dt>
+        <dd>A compact token format that carries claims; not the same thing as OAuth 2.0.</dd>
+
+        <dt>Kerberos</dt>
+        <dd>A ticket-based network authentication protocol commonly used in enterprise realms.</dd>
+      </dl>
+    </article>
+  </main>
+</body>
+</html>
