@@ -14,17 +14,14 @@ This repo is now set up as a minimal Hugo blog that can deploy to GitHub Pages w
 ```text
 .
 ├── .github/workflows/hugo.yml
-├── archetypes/default.md
 ├── content/
-│   ├── software/
-│   ├── thoughts/
-│   ├── food/
-│   └── book-reviews/
 ├── learning/
 ├── layouts/
 ├── static/css/site.css
 └── hugo.toml
 ```
+
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how the content model, templates, and build/deploy pipeline fit together.
 
 ## Content Sections
 
