@@ -2,7 +2,7 @@
 title: "Designing an API That Survives Failure"
 date: 2026-08-04T10:00:00+02:00
 draft: false
-tags: ["software", "csharp", "dotnet", "aspnetcore", "architecture", "dotnet-deep-dives"]
+tags: ["software", "csharp", "dotnet", "aspnetcore", "architecture", "dotnet-deep-dives", "ai-generated"]
 description: "Idempotency, retries, circuit breakers, and eventual consistency — worked through a payment API, plus the ASP.NET Core machinery and testing strategy that hold it up."
 ---
 

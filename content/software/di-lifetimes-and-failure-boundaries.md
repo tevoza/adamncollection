@@ -2,7 +2,7 @@
 title: "DI Lifetimes and Failure Boundaries"
 date: 2026-08-05T10:00:00+02:00
 draft: false
-tags: ["software", "csharp", "dotnet", "aspnetcore", "dotnet-deep-dives"]
+tags: ["software", "csharp", "dotnet", "aspnetcore", "dotnet-deep-dives", "ai-generated"]
 description: "Captive dependencies, why a singleton can't hold a DbContext, throw vs throw ex, and deciding where in a system a failure should be caught."
 ---
 

@@ -2,7 +2,7 @@
 title: "C# Language Mechanics: What the Keywords Actually Do"
 date: 2026-08-09T10:00:00+02:00
 draft: false
-tags: ["software", "csharp", "dotnet", "dotnet-deep-dives"]
+tags: ["software", "csharp", "dotnet", "dotnet-deep-dives", "ai-generated"]
 description: "Value and reference semantics, equality, readonly, ref/in/out, boxing, variance, delegates and events, pattern matching, and records — what each one actually costs and guarantees."
 ---
 

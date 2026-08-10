@@ -2,7 +2,7 @@
 title: "Async, Concurrency, and a Thread-Safe Cache"
 date: 2026-08-08T10:00:00+02:00
 draft: false
-tags: ["software", "csharp", "dotnet", "async", "concurrency", "dotnet-deep-dives"]
+tags: ["software", "csharp", "dotnet", "async", "concurrency", "dotnet-deep-dives", "ai-generated"]
 description: "What async/await compiles to, why sync-over-async starves the thread pool, and three ways to build a cache where only one caller populates a missing value."
 ---
 
