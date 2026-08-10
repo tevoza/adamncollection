@@ -320,15 +320,40 @@ blockquote {
     width: min(calc(100% - 1rem), var(--content-width));
   }
 
-  .site-header,
   .site-footer,
   .section-heading {
     align-items: flex-start;
     flex-direction: column;
   }
 
+  /* The header used to stack into a column here and stay sticky, so a title
+     row plus two wrapped nav rows sat pinned over the content for the whole
+     scroll — about a third of a phone viewport, with the post title passing
+     underneath it. Keep it on one row, let it wrap tightly if it must, and
+     let it scroll away. */
+  .site-header {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.9rem;
+    margin-top: 0;
+    padding: 0.6rem 1rem;
+    border-radius: 1.25rem;
+  }
+
+  .site-title {
+    font-size: 1rem;
+  }
+
   .site-nav {
     flex-wrap: wrap;
+    gap: 0.35rem 0.85rem;
+    font-size: 0.9rem;
+  }
+
+  .site-main {
+    padding-top: 1.5rem;
   }
 
   .feature-grid {
