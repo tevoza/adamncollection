@@ -18,6 +18,7 @@ This repo is now set up as a minimal Hugo blog that can deploy to GitHub Pages w
 ├── learning/
 ├── layouts/
 ├── static/css/site.css
+├── static/css/chroma.css
 └── hugo.toml
 ```
 
@@ -73,9 +74,21 @@ Check it:
 hugo version
 ```
 
+Note that the deploy workflow pins a specific version (`HUGO_VERSION` in
+[`.github/workflows/hugo.yml`](.github/workflows/hugo.yml)), and your package
+manager will usually install a newer one. To build locally against exactly what
+CI builds with, grab that release directly instead:
+
+```bash
+VERSION=0.147.2   # keep in sync with HUGO_VERSION
+curl -sSL -o hugo.tar.gz \
+  "https://github.com/gohugoio/hugo/releases/download/v${VERSION}/hugo_extended_${VERSION}_linux-amd64.tar.gz"
+mkdir -p ~/.local/bin && tar xzf hugo.tar.gz -C ~/.local/bin hugo
+```
+
 ## 2. Update Site Settings
 
-Edit [hugo.toml](/home/adam/projects/adamncollection/hugo.toml) and set:
+Edit [`hugo.toml`](hugo.toml) and set:
 
 - `baseURL` to your final GitHub Pages URL
 - `title` to your blog name
@@ -140,7 +153,7 @@ draft: false
 3. Set `Source` to `GitHub Actions`.
 4. Push to `main` again if needed!
 
-The workflow file is [hugo.yml](/home/adam/projects/adamncollection/.github/workflows/hugo.yml).
+The workflow file is [`.github/workflows/hugo.yml`](.github/workflows/hugo.yml).
 
 ## 6. First Git Push
 
