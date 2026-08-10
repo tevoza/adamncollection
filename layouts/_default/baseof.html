@@ -12,6 +12,7 @@
     </title>
     <meta name="description" content="{{ with .Description }}{{ . }}{{ else }}{{ .Site.Params.description }}{{ end }}" />
     <link rel="stylesheet" href="{{ "css/site.css" | relURL }}" />
+    <link rel="stylesheet" href="{{ "css/chroma.css" | relURL }}" />
     {{ with .OutputFormats.Get "RSS" -}}
       <link rel="alternate" type="application/rss+xml" title="{{ $.Site.Title }}" href="{{ .RelPermalink }}">
     {{- end }}

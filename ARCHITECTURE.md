@@ -34,7 +34,10 @@ No theme, no theme submodule — `layouts/` is hand-written:
 - `layouts/_default/list.html` — section/list pages (e.g. `/software/`): entry count + list of pages in that section, newest first.
 - `layouts/_default/single.html` — a single entry: date, title, description, tags, content.
 
-Styling is one hand-written stylesheet, `static/css/site.css`, linked from `baseof.html`. No CSS build step, no bundler.
+Styling is two hand-written stylesheets, both linked from `baseof.html`. No CSS build step, no bundler.
+
+- `static/css/site.css` — the site's own layout and typography, with the colour palette as `:root` custom properties.
+- `static/css/chroma.css` — syntax highlighting token colours for code blocks, defined against that same palette. Required because `[markup.highlight] noClasses = false` makes Hugo emit CSS classes rather than inline styles, so without these rules code renders unhighlighted. `hugo gen chromastyles --style=<name>` generates an equivalent file if you'd rather not hand-maintain it.
 
 ## Config (`hugo.toml`)
 

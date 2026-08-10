@@ -1,0 +1,165 @@
+/*
+ * Syntax highlighting for Chroma (Hugo's highlighter).
+ *
+ * hugo.toml sets `[markup.highlight] noClasses = false`, so Hugo emits token
+ * CSS classes instead of inline styles — which does nothing until something
+ * defines them. This file defines them, in a dark palette matched to the
+ * variables in site.css.
+ *
+ * Hand-written rather than generated: `hugo gen chromastyles --style=nord`
+ * produces an equivalent file if you'd rather regenerate it, but that emits
+ * hardcoded hexes unrelated to the site palette.
+ */
+
+:root {
+  --code-comment: #7f93b0;
+  --code-keyword: #c084fc;
+  --code-type: #7dd3fc;
+  --code-string: #9ae6b4;
+  --code-number: #ffb86c;
+  --code-function: #82d8ff;
+  --code-operator: #9baeca;
+  --code-preproc: #f5a3c7;
+  --code-error: #ff8b8b;
+}
+
+/* Hugo wraps highlighted blocks in <div class="highlight"><pre class="chroma">. */
+.highlight pre.chroma {
+  margin: 0;
+}
+
+.highlight {
+  margin: 1.5rem 0;
+}
+
+.chroma code {
+  color: var(--text);
+}
+
+/* Comments */
+.chroma .c,
+.chroma .ch,
+.chroma .cm,
+.chroma .c1,
+.chroma .cs {
+  color: var(--code-comment);
+  font-style: italic;
+}
+
+/* Preprocessor (#region, #nullable, #if) */
+.chroma .cp,
+.chroma .cpf {
+  color: var(--code-preproc);
+}
+
+/* Keywords */
+.chroma .k,
+.chroma .kc,
+.chroma .kd,
+.chroma .kn,
+.chroma .kp,
+.chroma .kr {
+  color: var(--code-keyword);
+}
+
+/* Built-in and declared type names */
+.chroma .kt,
+.chroma .nc,
+.chroma .nn,
+.chroma .ne,
+.chroma .no {
+  color: var(--code-type);
+}
+
+/* Function and method names */
+.chroma .nf,
+.chroma .nd {
+  color: var(--code-function);
+}
+
+/* Attributes, labels, other names */
+.chroma .na,
+.chroma .nl,
+.chroma .nb {
+  color: var(--code-type);
+}
+
+.chroma .n,
+.chroma .nv,
+.chroma .nx {
+  color: var(--text);
+}
+
+/* Strings, including interpolation and escapes */
+.chroma .s,
+.chroma .s1,
+.chroma .s2,
+.chroma .sb,
+.chroma .sc,
+.chroma .sd,
+.chroma .sh,
+.chroma .sx,
+.chroma .sr,
+.chroma .ss {
+  color: var(--code-string);
+}
+
+.chroma .se,
+.chroma .si {
+  color: var(--code-number);
+}
+
+/* Numbers */
+.chroma .m,
+.chroma .mb,
+.chroma .mf,
+.chroma .mh,
+.chroma .mi,
+.chroma .mo,
+.chroma .il {
+  color: var(--code-number);
+}
+
+/* Operators and punctuation */
+.chroma .o,
+.chroma .ow {
+  color: var(--code-operator);
+}
+
+.chroma .p {
+  color: var(--muted);
+}
+
+/* Errors */
+.chroma .err {
+  color: var(--code-error);
+}
+
+/* Generic (diff-style) tokens */
+.chroma .gd {
+  color: var(--code-error);
+}
+
+.chroma .gi {
+  color: var(--code-string);
+}
+
+.chroma .ge {
+  font-style: italic;
+}
+
+.chroma .gs {
+  font-weight: 700;
+}
+
+/* Line numbers and highlighted lines */
+.chroma .lnt,
+.chroma .ln {
+  color: var(--code-comment);
+  user-select: none;
+}
+
+.chroma .hl {
+  background: rgba(125, 211, 252, 0.1);
+  display: block;
+}
