@@ -1,7 +1,7 @@
 ---
 title: "Memory, GC, and Allocation"
 date: 2026-08-06T10:00:00+02:00
-draft: true
+draft: false
 tags: ["software", "csharp", "dotnet", "performance", "dotnet-deep-dives"]
 description: "Generational GC, the Large Object Heap, why using doesn't free anything, how events leak memory, and where Span<T> genuinely helps."
 ---

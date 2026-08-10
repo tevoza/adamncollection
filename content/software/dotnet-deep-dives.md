@@ -1,7 +1,7 @@
 ---
 title: ".NET Deep Dives"
 date: 2026-08-10T10:00:00+02:00
-draft: true
+draft: false
 tags: ["software", "csharp", "dotnet", "dotnet-deep-dives"]
 description: "A six-part series on the parts of C# and .NET where correct-looking code behaves badly — async, EF Core, memory, DI, and failure design."
 ---

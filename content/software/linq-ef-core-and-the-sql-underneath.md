@@ -1,7 +1,7 @@
 ---
 title: "LINQ, EF Core, and the SQL Underneath"
 date: 2026-08-07T10:00:00+02:00
-draft: true
+draft: false
 tags: ["software", "csharp", "dotnet", "linq", "ef-core", "dotnet-deep-dives"]
 description: "Deferred execution, IQueryable vs IEnumerable, expression trees, N+1, tracking — and a full walkthrough of why an endpoint returning 50,000 rows takes fifteen seconds."
 ---
