@@ -76,7 +76,7 @@ The other way to trip it is calling something EF can't translate:
 _db.Users.Where(u => MyHelper.IsEligible(u))    // no SQL for this
 ```
 
-EF Core 3.0 and later throw `InvalidOperationException` rather than silently falling back to client evaluation. This was a breaking change that caused a lot of grumbling and was absolutely the right decision — the old behaviour turned a translation failure into a silent full-table download.
+EF Core 3.0 and later throw `InvalidOperationException` rather than silently falling back to client evaluation.[^ef-clienteval] This was a breaking change that caused a lot of grumbling and was absolutely the right decision — the old behaviour turned a translation failure into a silent full-table download. Note the one place client evaluation is still allowed: the top-level projection. You can call arbitrary C# in a final `Select`, because by then the rows have already been fetched.
 
 ## Expression trees, briefly
 
@@ -120,7 +120,7 @@ Four methods encoding two independent questions: *may it be missing?* and *may t
 
 The choice is a documentation decision as much as a behavioural one. `Single` says "this is unique and I want to know loudly if that's ever false." `First` says "there may be several and I only care about one" — which is why `First` without an `OrderBy` is a smell: without ordering, "first" is whatever the database felt like returning.
 
-There's a performance asymmetry too. `First` can stop at the first match; `Single` must scan for a second one to prove uniqueness. Against SQL, `First` emits `TOP 1` while `Single` emits `TOP 2` so it can detect the duplicate. Don't use `Single` on a large unindexed column as a way of being careful — it costs more than you think.
+There's a performance asymmetry too. `First` can stop at the first match; `Single` must look for a second one in order to prove uniqueness, so it necessarily fetches one row more than it needs. Don't reach for `Single` on a large unindexed column as a way of being careful — the extra row is cheap, but the scan that finds it may not be.
 
 ## The cost of ToList
 
@@ -144,9 +144,11 @@ For a read-only query, it's pure waste:
 var users = await _db.Users.AsNoTracking().ToListAsync();
 ```
 
-On large read-only result sets this is one of the easiest wins available — often 20–50% off the query's total cost, entirely from not building change-tracking state.
+The documentation puts it plainly: no-tracking queries "are generally quicker to execute because there's no need to set up the change tracking information".[^ef-tracking] How much quicker depends entirely on the entity count and shape — I'd distrust anyone quoting you a fixed percentage, this post included. Measure it on your own query. The point is that for a read-only endpoint the saving is free, because you were never going to call `SaveChanges` anyway.
 
-Tracking also has a correctness dimension people meet by accident: within one `DbContext`, a query returning an entity that's already tracked gives you back **the tracked instance**, not fresh data from the database. This is identity resolution, and it means a second query won't show you changes another process made if you already have that row loaded. `AsNoTracking` sidesteps it by never consulting the tracker.
+Tracking also has a correctness dimension people meet by accident: within one `DbContext`, "EF Core checks if the entity is already in the context. If EF Core finds an existing entity, then the same instance is returned",[^ef-tracking] and it does not overwrite that instance's values with the ones just read from the database. This is identity resolution, and it means a second query won't show you changes another process made if you already have that row loaded.
+
+`AsNoTracking` sidesteps it by never consulting the tracker — which has its own consequence worth knowing: a no-tracking query returns "a new instance of the entity even when the same entity is contained in the result multiple times".[^ef-tracking] If you need deduplicated instances without tracking, `AsNoTrackingWithIdentityResolution()` gives you both.
 
 Use tracking when you intend to modify and save. Use `AsNoTracking` for everything else, which in a typical API is most queries.
 
@@ -183,7 +185,7 @@ Detecting it is largely a matter of *looking at the SQL*, which brings us to the
 
 `Include` on a collection navigation produces a JOIN, and a JOIN duplicates the parent row once per child. Load 100 orders each with 50 items and one JOIN returns 5,000 rows, with all the order columns repeated 50 times each. Stack two collection `Include`s and you get a cartesian product — 100 × 50 × 20 rows for data you could have fetched in three queries.
 
-This is bad enough that EF Core added `AsSplitQuery()`, which issues one query per collection navigation and stitches the results together in memory. Trading one round trip for three is usually the right call when the alternative is an order of magnitude more rows over the wire.
+This is bad enough that EF Core 5.0 added `AsSplitQuery()`, which issues one query per collection navigation and stitches the results together in memory.[^ef-splitquery] Trading one round trip for three is usually the right call when the alternative is an order of magnitude more rows over the wire. The tradeoff the docs are careful about: split queries aren't executed in a single transaction by default, so the data can shift between them.
 
 Projection avoids the whole issue: select the shape you actually need and EF generates SQL that returns exactly that.
 
@@ -195,7 +197,7 @@ An endpoint returns 50,000 records and takes 15 seconds. How do you investigate?
 
 **Start by finding where the time goes.** Fifteen seconds is a budget to be accounted for, and it can sit in any of: query execution in the database, transferring rows over the network, materialising entities in EF, serialising to JSON, or something entirely unrelated like a synchronous call in the middle of the pipeline. Guessing wastes the most time. Log the timings and split the budget before touching anything.
 
-**Look at the generated SQL.** Not the LINQ — the SQL. Turn on `EnableSensitiveDataLogging` in development, or attach a profiler. This is where you discover the query you thought you wrote isn't the query being run: an accidental client evaluation, a cartesian explosion from stacked `Include`s, or a thousand small queries where you expected one. A large fraction of "slow EF query" investigations end here.
+**Look at the generated SQL.** Not the LINQ — the SQL. EF Core logs the commands it executes at `Information` level under the `Database.Command` category, so raising that in development is usually enough;[^ef-logging] add `EnableSensitiveDataLogging` if you also need the parameter *values* (and note the name is a warning — it will put user data in your logs). Or attach a profiler. This is where you discover the query you thought you wrote isn't the query being run: an accidental client evaluation, a cartesian explosion from stacked `Include`s, or a thousand small queries where you expected one. A large fraction of "slow EF query" investigations end here.
 
 **Get the execution plan** for that SQL, from the database, not from EF. This tells you whether the database itself is the problem: a table scan where you expected a seek, a missing index on a foreign key or a filter column, a bad join order, or stale statistics. If the plan is clean and the query runs in 200ms in a SQL client, the database isn't your problem and no index will help.
 
@@ -248,7 +250,7 @@ The general principle: **push aggregation down to the database, and pull back th
 
 ## Transactions and SaveChanges
 
-`SaveChanges` walks the change tracker, works out the INSERT/UPDATE/DELETE statements needed, orders them to respect foreign keys, and executes them **inside an implicit transaction**. One `SaveChanges` is atomic — all of it commits or none of it does.
+`SaveChanges` walks the change tracker, works out the INSERT/UPDATE/DELETE statements needed, orders them to respect foreign keys, and executes them **inside an implicit transaction**. One `SaveChanges` is atomic — all of it commits or none of it does.[^ef-transactions]
 
 That's the detail worth internalising, because it determines where your transaction boundaries should go. If your unit of work is a single `SaveChanges`, you already have atomicity and don't need an explicit transaction. You need `BeginTransaction` when you must span multiple `SaveChanges` calls, or combine EF work with raw SQL.
 
@@ -269,15 +271,15 @@ public class Product
 }
 ```
 
-EF includes the token in the `WHERE` clause of the UPDATE: `WHERE Id = 5 AND RowVersion = 0x...`. If another transaction changed the row, the version no longer matches, zero rows are affected, and EF throws `DbUpdateConcurrencyException`. Without a token, that write is a silent last-writer-wins — the classic lost update.
+EF includes the token in the `WHERE` clause of the UPDATE: `WHERE Id = 5 AND RowVersion = 0x...`. If another transaction changed the row, the version no longer matches, zero rows are affected, and EF throws `DbUpdateConcurrencyException`.[^ef-concurrency] Without a token, that write is a silent last-writer-wins — the classic lost update.
 
 Handling the exception means deciding a policy: reload and retry, surface the conflict to the user, or merge. There is no generic right answer, which is why EF makes you write it.
 
 ### DbContext lifetime
 
-`DbContext` is **not thread-safe**, and this is not a soft warning — concurrent use corrupts the change tracker and throws `InvalidOperationException: A second operation was started on this context instance before a previous operation completed`.
+`DbContext` is **not thread-safe**, and this is not a soft warning. EF Core detects the overlap and throws an `InvalidOperationException` reporting that "a second operation was started on this context instance before a previous operation completed" — the message goes on to name the cause as different threads sharing one instance.[^ef-dbcontext] Where it isn't detected, you get change-tracker corruption instead, which is worse because it's silent.
 
-It's designed to be short-lived: one per unit of work, which in a web app means one per request. `AddDbContext` registers it as **scoped**, which gives you exactly that.
+It's designed to be short-lived: one per unit of work, which in a web app means one per request. `AddDbContext` registers it as **scoped** by default, which gives you exactly that.[^ef-dbcontext-lifetime]
 
 The most common way to break it is to fire off parallel queries on one context:
 
@@ -299,3 +301,12 @@ LINQ's uniformity is a genuine achievement and the source of most of its hazards
 Two habits cover most of it. Know whether you're holding an `IQueryable` or an `IEnumerable` at every point in a chain. And when something's slow, read the SQL before you theorise — the gap between the query you wrote and the query that ran is where the time usually is.
 
 Next: [memory, GC, and allocation]({{< relref "memory-gc-and-allocation.md" >}}) — including why a garbage-collected service still runs out of memory.
+
+[^ef-tracking]: Microsoft, ["Tracking vs. No-Tracking Queries"](https://learn.microsoft.com/en-us/ef/core/querying/tracking) — no-tracking queries are "generally quicker to execute"; identity resolution returns the tracked instance; no-tracking returns a new instance per occurrence; `AsNoTrackingWithIdentityResolution`.
+[^ef-clienteval]: Microsoft, ["Client vs. Server Evaluation"](https://learn.microsoft.com/en-us/ef/core/querying/client-eval) — EF Core 3.0 stopped silently evaluating arbitrary expressions on the client; top-level projections remain the exception.
+[^ef-splitquery]: Microsoft, ["Single vs. Split Queries"](https://learn.microsoft.com/en-us/ef/core/querying/single-split-queries) — cartesian explosion from multiple collection `Include`s, `AsSplitQuery`, and the consistency tradeoff.
+[^ef-logging]: Microsoft, ["Simple Logging"](https://learn.microsoft.com/en-us/ef/core/logging-events-diagnostics/simple-logging) — EF Core logs executed commands; `EnableSensitiveDataLogging` additionally logs parameter values.
+[^ef-dbcontext]: Microsoft, ["DbContext Lifetime, Configuration, and Initialization"](https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/) — `DbContext` is not thread-safe, and the exception raised when operations overlap.
+[^ef-dbcontext-lifetime]: Microsoft, ["DbContext Lifetime, Configuration, and Initialization"](https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/) — `AddDbContext` registers the context as a scoped service by default; `IDbContextFactory` for other lifetimes.
+[^ef-concurrency]: Microsoft, ["Handling Concurrency Conflicts"](https://learn.microsoft.com/en-us/ef/core/saving/concurrency) — concurrency tokens in the `WHERE` clause, and `DbUpdateConcurrencyException` when no rows match.
+[^ef-transactions]: Microsoft, ["Using Transactions"](https://learn.microsoft.com/en-us/ef/core/saving/transactions) — a single `SaveChanges` is applied in a transaction.

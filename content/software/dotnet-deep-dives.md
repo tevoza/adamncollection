@@ -12,6 +12,8 @@ This series is about that category. Six posts, each on an area where the gap bet
 
 The organising question throughout is **what does this actually turn into** — how many round trips, how many allocations, which thread, and what happens when it fails halfway through. Every measured claim came out of a scratch project rather than memory, and where something surprised me I've said so.
 
+Because these posts are AI-written, the specific claims in them are footnoted against Microsoft's .NET documentation — thresholds, defaults, version-introduced behaviour, and API guarantees all cite the page they came from. That pass was worth doing for its own sake: it caught several things the first drafts got wrong, including a confident and completely incorrect claim about how far `HybridCache`'s stampede protection reaches. Where a claim couldn't be sourced, it has been softened or removed rather than left to sound authoritative. Treat an uncited number as an opinion.
+
 ## The posts
 
 **[C# Language Mechanics]({{< relref "csharp-language-mechanics.md" >}})** — the ground floor. Value and reference semantics, why `==` and `Equals` disagree, what `readonly` does and doesn't promise, `ref`/`in`/`out`, boxing, variance, delegates and events, pattern matching and records.

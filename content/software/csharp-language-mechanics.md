@@ -54,7 +54,7 @@ These are three axes, not three points, which is why the comparison is usually m
 - `struct` — value type, value equality by default (though the default implementation is slow; see below).
 - `record` — a *modifier* on either. `record` (or `record class`) is a reference type with compiler-generated value equality. `record struct` is a value type with a better-generated equality implementation than a plain struct gets.
 
-What `record` actually generates for you: a value-based `Equals`/`GetHashCode`, a `ToString` that prints members, a `Deconstruct` for positional records, and a copy constructor backing the `with` expression.
+What `record` actually generates for you: a value-based `Equals`/`GetHashCode`, a `ToString` that prints members, a `Deconstruct` for positional records, and a copy constructor backing the `with` expression.[^records]
 
 ```csharp
 public record Money(decimal Amount, string Currency);
@@ -89,13 +89,13 @@ x == y;          // false — operator resolved for object, i.e. reference compa
 x.Equals(y);     // true  — virtual dispatch reaches string.Equals
 ```
 
-`string` overloads `==` to do value comparison, but only when the compiler knows both sides are `string`. Widen either side to `object` and you silently get reference comparison back.
+`string` overloads `==` to do value comparison, but only when the compiler knows both sides are `string`.[^equality] Widen either side to `object` and you silently get reference comparison back.
 
 The practical rule: in generic code, never use `==` on `T` unless you've constrained it. Use `EqualityComparer<T>.Default.Equals(a, b)`, which routes to `IEquatable<T>` when available and does the right thing for value and reference types alike.
 
 ## const, readonly, and what readonly guarantees
 
-`const` is compile-time. The value is baked into the call site's IL. That gives it a genuinely surprising deployment property: if library A exposes `public const int Version = 1` and assembly B compiles against it, B contains the literal `1`. Ship a new A with `Version = 2` and B still says `1` until B is recompiled. For anything that might change independently, `static readonly` is the safer choice — it's a field read at runtime.
+`const` is compile-time. The value is baked into the call site's IL.[^const] That gives it a genuinely surprising deployment property: if library A exposes `public const int Version = 1` and assembly B compiles against it, B contains the literal `1`. Ship a new A with `Version = 2` and B still says `1` until B is recompiled. For anything that might change independently, `static readonly` is the safer choice — it's a field read at runtime.
 
 `readonly` on a field means the reference can't be reassigned after construction. It says nothing at all about the object being referenced:
 
@@ -128,7 +128,9 @@ All three make the parameter an **alias** for the caller's variable rather than 
 
 ### ref struct
 
-A `ref struct` is a type that is guaranteed to live on the stack. `Span<T>` is the canonical one. The constraints follow from that guarantee: it can't be boxed, can't be a field of a class, can't be captured by a lambda, can't be an array element, and — until recently — couldn't live across an `await` or `yield`.
+A `ref struct` is a type that is guaranteed to live on the stack. `Span<T>` is the canonical one. The constraints follow from that guarantee: it can't be boxed to `ValueType` or `object`, can't be the type of a field in a class or non-`ref struct`, can't be captured by a lambda or local function, and can't be the element type of an array.[^refstruct]
+
+Two of these were relaxed in C# 13, and it's worth being precise about how far. Before C# 13 a `ref struct` couldn't appear in an `async` method at all; now it can, but "a `ref struct` variable can't be used in the same block as the `await` expression".[^refstruct] Iterators changed the same way — allowed, "provided they aren't in code segments with the `yield return` statement". So the underlying rule never moved: the value still must not be alive across a suspension point, because that's exactly where it would have to be stored on the heap. C# 13 also let a `ref struct` implement interfaces and be used as a type argument under an `allows ref struct` constraint.
 
 None of those are arbitrary. Every one of them is a way the value could outlive the stack frame it points into, which would leave you with a reference to a dead frame. The compiler is enforcing lifetime, not being difficult.
 
@@ -136,7 +138,7 @@ None of those are arbitrary. Every one of them is a way the value could outlive 
 
 ## Boxing
 
-Boxing converts a value type to a reference type by allocating a heap object and copying the value into it. Unboxing copies it back out. Each box is an allocation, which means GC pressure.
+Boxing converts a value type to a reference type by allocating a heap object and copying the value into it.[^boxing] Unboxing copies it back out. Each box is an allocation, which means GC pressure.
 
 Where it happens, in rough order of how often it surprises people:
 
@@ -155,7 +157,7 @@ Boxing is only a problem at volume. One box is nothing; a box per item per reque
 
 ## Nullable reference types
 
-NRTs are a **compile-time** feature with no runtime representation. `string?` and `string` are the same type at runtime — the difference lives in attributes and the compiler's flow analysis.
+NRTs are a **compile-time** feature with no runtime representation.[^nrt] `string?` and `string` are the same type at runtime — the difference lives in attributes and the compiler's flow analysis.
 
 That has two consequences worth internalising. Nullability is advisory: a null can still arrive at a non-nullable parameter from unannotated code, from reflection, from deserialisation, or from any assembly compiled without the feature on. And warnings are only as good as your build settings — `<Nullable>enable</Nullable>` plus warnings-as-errors, or the analysis is decoration.
 
@@ -168,7 +170,7 @@ Covariance and contravariance are about which substitutions are safe when a gene
 - **Covariance** (`out T`) — a producer of a derived type can stand in for a producer of a base type. `IEnumerable<string>` is an `IEnumerable<object>`, because everything it hands you is a `string`, and a `string` is an `object`.
 - **Contravariance** (`in T`) — a consumer of a base type can stand in for a consumer of a derived type. `Action<object>` is an `Action<string>`, because anything that can handle any `object` can certainly handle a `string`.
 
-The `in`/`out` keywords in a generic declaration are the compiler enforcing that `T` only appears in a safe position — `out T` may only appear in return position, `in T` only in parameter position. That's why `IList<T>` is invariant: it both accepts and returns `T`, so neither substitution is safe. If `IList<string>` were an `IList<object>`, you could insert an `int` into a list of strings.
+The `in`/`out` keywords in a generic declaration are the compiler enforcing that `T` only appears in a safe position[^variance] — `out T` may only appear in return position, `in T` only in parameter position. That's why `IList<T>` is invariant: it both accepts and returns `T`, so neither substitution is safe. If `IList<string>` were an `IList<object>`, you could insert an `int` into a list of strings.
 
 Arrays are covariant and shouldn't be — it's a pre-generics wart. `string[]` is assignable to `object[]`, and writing the wrong type into it throws `ArrayTypeMismatchException` at runtime rather than failing to compile.
 
@@ -182,7 +184,7 @@ Default interface implementations muddy this deliberately, and their real purpos
 
 ## Delegates, Func/Action, and events
 
-A delegate is a type-safe function pointer, and specifically a **multicast** one: every delegate derives from `MulticastDelegate` and carries an invocation list.
+A delegate is a type-safe function pointer, and specifically a **multicast** one: every delegate derives from `MulticastDelegate` and carries an invocation list.[^multicast]
 
 ```csharp
 Action log = () => Console.Write("a");
@@ -232,7 +234,7 @@ decimal Price(Shipment s) => s switch
 
 The things worth knowing beyond the syntax:
 
-Switch **expressions** are exhaustive-checked. If the compiler can't prove every input is handled it warns, and an unmatched value at runtime throws `SwitchExpressionException` rather than falling through silently. That's a meaningful upgrade over switch statements.
+Switch **expressions** are exhaustive-checked. If the compiler can't prove every input is handled it warns, and an unmatched value at runtime throws `SwitchExpressionException` rather than falling through silently.[^switch-expr] That's a meaningful upgrade over switch statements.
 
 Order matters — arms are evaluated top to bottom, so a broader pattern above a narrower one makes the narrower one unreachable. The compiler catches that for some cases and not all.
 
@@ -243,3 +245,13 @@ And the honest caveat: heavy type-based pattern matching over a class hierarchy 
 Everything above is single-threaded and mostly free. The interesting failures start when you add concurrency, a database, or a network — which is the rest of the series.
 
 The next post takes `async`/`await` apart, then builds a thread-safe cache three different ways to show what "only one caller should populate this" actually costs.
+
+[^equality]: Microsoft, ["Equality operators"](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/equality-operators) and ["Object.Equals"](https://learn.microsoft.com/en-us/dotnet/api/system.object.equals) — `==` is resolved on the static type; `Equals` is virtual.
+[^const]: Microsoft, ["const (C# Reference)"](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/const) — constants are evaluated at compile time and substituted into consuming assemblies.
+[^boxing]: Microsoft, ["Boxing and Unboxing"](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/types/boxing-and-unboxing) — boxing allocates on the heap and copies the value.
+[^nrt]: Microsoft, ["Nullable reference types"](https://learn.microsoft.com/en-us/dotnet/csharp/nullable-references) — a compile-time static analysis feature; annotations don't change runtime behaviour.
+[^variance]: Microsoft, ["Covariance and Contravariance in Generics"](https://learn.microsoft.com/en-us/dotnet/standard/generics/covariance-and-contravariance) — `out`/`in` type parameters and why `IList<T>` is invariant.
+[^refstruct]: Microsoft, ["ref struct types"](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/ref-struct) — the full restriction list, and the C# 13 changes to `async`, iterators, interfaces, and `allows ref struct`.
+[^multicast]: Microsoft, ["MulticastDelegate Class"](https://learn.microsoft.com/en-us/dotnet/api/system.multicastdelegate) — delegates hold an invocation list; invoking returns the last method's result.
+[^records]: Microsoft, ["Records"](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/record) — synthesised value equality, `ToString`, `Deconstruct`, and the copy constructor behind `with`.
+[^switch-expr]: Microsoft, ["switch expression"](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/switch-expression) — non-exhaustive switch expressions warn, and throw `SwitchExpressionException` at runtime.

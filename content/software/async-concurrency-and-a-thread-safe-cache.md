@@ -16,9 +16,9 @@ Every number quoted below came out of a scratch console project on .NET 10, not 
 
 This is the load-bearing misconception, so it goes first.
 
-`async` is a compiler instruction. It says: rewrite this method as a state machine so it can be suspended and resumed. It does not start a thread, queue work, or introduce parallelism. A method marked `async` that never awaits anything incomplete runs entirely synchronously on the calling thread, and the compiler will warn you about it.
+`async` is a compiler instruction. It says: rewrite this method as a state machine so it can be suspended and resumed. It does not start a thread, queue work, or introduce parallelism — the documentation is unusually blunt about this: "The `async` and `await` keywords don't cause extra threads to be created. Async methods don't require multithreading because an async method doesn't run on its own thread."[^async-threads] A method marked `async` containing no `await` at all runs entirely synchronously on the calling thread, and the compiler warns you about it.[^async-nowait]
 
-What actually happens is closer to a callback transformation. The compiler splits your method at each `await` into a state machine — a struct implementing `IAsyncStateMachine` with a `MoveNext()` method containing your code as a switch over states. Roughly:
+What actually happens is closer to a callback transformation. The compiler splits your method at each `await` into a state machine implementing `IAsyncStateMachine`, with a `MoveNext()` method containing your code as a switch over states.[^async-statemachine] Roughly:
 
 ```csharp
 public async Task<User> GetUserAsync(int id)
@@ -43,13 +43,16 @@ A `Task` is a promise object: a heap allocation carrying a state (pending/succee
 
 `ValueTask<T>` exists because that allocation is wasteful when the method usually completes synchronously. A cache lookup that hits 95% of the time allocates a `Task<T>` on every one of those hits for nothing. `ValueTask<T>` is a struct that either wraps a result directly (no allocation) or wraps a `Task` when it genuinely has to suspend.
 
-The cost is a much more restrictive contract. A `ValueTask`:
+The cost is a much more restrictive contract. The documented list of things you must never do to a `ValueTask` is:[^valuetask-rules]
 
-- may be awaited **only once**;
-- must not be awaited concurrently from multiple callers;
-- must not have `.Result` read before it completes.
+- await it more than once;
+- call `.AsTask()` more than once;
+- use `.Result` or `.GetAwaiter().GetResult()` before it has completed, or more than once;
+- use more than one of these techniques to consume it.
 
-`Task` permits all three. Violating the `ValueTask` rules doesn't reliably throw — it can return the wrong value, because the underlying `IValueTaskSource` may have been recycled for a different operation. If you need to await something twice, call `.AsTask()` first.
+`Task` permits all of them. Violating the `ValueTask` rules doesn't reliably throw — the docs simply say "the results are undefined", because the underlying `IValueTaskSource` may have been recycled for a different operation by the time you look again. If you need to consume it twice, call `.AsTask()` once and use that.
+
+Microsoft's own guidance is that `Task` remains the default: "the default choice for any asynchronous method should be to return a `Task` or `Task<TResult>`. Only if performance analysis proves it worthwhile should a `ValueTask<TResult>` be used".[^valuetask-rules]
 
 Use `ValueTask<T>` for hot-path methods that usually complete synchronously. Use `Task` everywhere else. It is the correct default, and "we changed everything to ValueTask for performance" is usually a change that made the code harder to reason about and no faster.
 
@@ -79,7 +82,9 @@ Calling `.Result` or `.Wait()` on an incomplete task blocks the current thread u
 
 Modern ASP.NET Core has **no** synchronization context, so this specific deadlock doesn't occur. That's led to a widespread belief that `.Result` is now safe. It isn't — the second failure is worse, because it scales.
 
-**Thread-pool starvation.** Every blocked thread is a pool thread doing nothing but waiting. Under load, requests arrive faster than threads free up, so the pool injects more threads — but deliberately slowly, roughly one or two per second, because the pool assumes blocking is temporary and thread creation is expensive. Meanwhile the queue grows. Latency climbs from milliseconds to seconds, then requests time out, and CPU usage sits near zero the whole time because nothing is actually *doing* anything.
+**Thread-pool starvation.** Every blocked thread is a pool thread doing nothing but waiting. Beyond its minimum, the pool doesn't simply add a thread per queued work item — it "creates and destroys worker threads in order to optimize throughput", tuning the count with a hill-climbing algorithm rather than reacting instantly.[^threadpool-injection] That's the right behaviour when blocking is rare and brief, and exactly the wrong shape when every request is blocking: new threads arrive far slower than blocked ones accumulate. Meanwhile the queue grows. Latency climbs from milliseconds to seconds, then requests time out, and CPU usage sits near zero the whole time because nothing is actually *doing* anything.
+
+Raising `ThreadPool.SetMinThreads` is the usual panicked response, and the docs warn against it directly: "unnecessarily increasing these values can cause performance problems… In most cases the thread pool will perform better with its own algorithm for allocating threads."[^threadpool-injection] It buys time; it doesn't fix a blocking call.
 
 The signature is unmistakable once you've seen it: high latency, growing queue, flat low CPU. The fix is never "add more threads"; it's to stop blocking. Async all the way down, or synchronous all the way down — the mixture is what kills you.
 
@@ -120,11 +125,11 @@ They solve different problems and are not interchangeable.
 
 `Task.WhenAll` is for **I/O-bound** work. It starts N asynchronous operations and waits for all of them; no threads are consumed while they're in flight. Its weakness is that it has no built-in concurrency limit — `Task.WhenAll` over 10,000 HTTP calls tries to start 10,000 HTTP calls.
 
-`Parallel.ForEach` is for **CPU-bound** work. It partitions across pool threads and blocks until done. Handing it an async lambda is a common mistake — `Parallel.ForEach(items, async i => await ...)` takes an `Action`, so the lambda becomes `async void`, and the loop returns immediately having awaited nothing. `Parallel.ForEachAsync` (added in .NET 6) is the async-aware version, and it takes a `MaxDegreeOfParallelism`.
+`Parallel.ForEach` is for **CPU-bound** work. It partitions across pool threads and blocks until done. Handing it an async lambda is a common mistake — `Parallel.ForEach(items, async i => await ...)` takes an `Action`, so the lambda becomes `async void`, and the loop returns immediately having awaited nothing. `Parallel.ForEachAsync`, added in .NET 6, is the async-aware version, and it accepts a `ParallelOptions` carrying `MaxDegreeOfParallelism`.[^foreachasync]
 
 ### Choosing a lock
 
-- `lock` — syntax sugar over `Monitor.Enter`/`Exit` with a `try`/`finally`. Fast, reentrant, and **cannot be held across an `await`**: the compiler forbids it, because `Monitor` locks are owned by a thread and the continuation may resume on a different one.
+- `lock` — syntax sugar over `Monitor.Enter`/`Exit` with a `try`/`finally`. Fast, reentrant, and **cannot be held across an `await`**: the compiler forbids it (CS1996), because `Monitor` locks are thread-affine — "a synchronized block of code is owned by a thread" — and the continuation may resume on a different one.[^monitor-affinity]
 - `Monitor` — the same primitive, unwrapped, when you need `TryEnter` with a timeout.
 - `SemaphoreSlim` — a counter, not a lock. Not thread-affine, so `WaitAsync` *can* be awaited. This is the standard choice for async mutual exclusion, with a count of 1. Not reentrant: the same thread awaiting twice deadlocks itself.
 - `Interlocked` — single atomic operations (`Increment`, `Exchange`, `CompareExchange`) implemented as CPU instructions, no kernel involvement. Enormously cheaper than a lock when a single counter or reference swap is all you need.
@@ -141,7 +146,9 @@ if (!dict.ContainsKey(key))     // thread-safe
 
 Between the check and the write, another thread can do the same thing. Both compute; one wins. This is precisely the cache stampede, and it's why `ConcurrentDictionary` provides `GetOrAdd` and `AddOrUpdate` as single composite operations.
 
-Even `GetOrAdd` has a caveat worth knowing: **the factory delegate is not run under a lock**. Concurrent callers for a missing key may all execute the factory; only one result is stored and returned to everyone. For a cheap factory that's a harmless waste. For a factory that queries a database, it's the entire problem this post is about.
+Even `GetOrAdd` has a caveat worth knowing, and it's documented explicitly: **the factory delegate is not run under a lock.** The dictionary "uses fine-grained locking to ensure thread safety… However, the `valueFactory` delegate is called outside the locks to avoid the problems that can arise from executing unknown code under a lock. Therefore, `GetOrAdd` is not atomic."[^getoradd-factory] The consequence follows directly: "If you call `GetOrAdd` simultaneously on different threads, `valueFactory` may be called multiple times, but only one key/value pair will be added to the dictionary."[^getoradd-factory]
+
+For a cheap factory that's a harmless waste. For a factory that queries a database, it's the entire problem this post is about.
 
 ### Race conditions and deadlocks
 
@@ -264,9 +271,9 @@ public Task<T> GetOrAddAsync(string key, Func<Task<T>> factory) =>
         factory, LazyThreadSafetyMode.ExecutionAndPublication)).Value;
 ```
 
-100 callers, factory ran **once**. No locks, no double-check, five lines.
+100 callers, factory ran **once**. No locks, no double-check, three lines.
 
-The `Lazy<T>` wrapper is doing specific work. Recall that `ConcurrentDictionary.GetOrAdd` may invoke its factory on multiple threads concurrently. Without `Lazy`, several threads could each call `factory()` — starting several database queries — even though only one resulting task gets stored. Wrapping in `Lazy` with `ExecutionAndPublication` means the *creation of the task* is what's synchronised: `.Value` is computed exactly once, so `factory()` is invoked exactly once. Extra `Lazy` instances may be constructed and discarded, but constructing a `Lazy` is nearly free — it's `.Value` that matters.
+The `Lazy<T>` wrapper is doing specific work. Recall that `ConcurrentDictionary.GetOrAdd` may invoke its factory on multiple threads concurrently. Without `Lazy`, several threads could each call `factory()` — starting several database queries — even though only one resulting task gets stored. `LazyThreadSafetyMode.ExecutionAndPublication` means "only one thread at a time can initialize the `Lazy<T>` instance",[^lazy-mode] so the *creation of the task* is what's synchronised: `.Value` is computed exactly once, and `factory()` is invoked exactly once. Extra `Lazy` instances may be constructed and discarded, but constructing a `Lazy` is nearly free — it's `.Value` that matters.
 
 Now the catch, and it's a real one. **A faulted task stays cached.** Called three times against a factory that always throws, the factory ran **once**; the second and third callers received the cached faulted task and re-threw the original exception without retrying. The cache has memoised the failure. If the database was down for one second, the key serves that error until the entry expires — potentially forever, if the entry has no TTL.
 
@@ -289,7 +296,7 @@ public async Task<T> GetOrAddAsync(string key, Func<Task<T>> factory)
 }
 ```
 
-The `TryRemove` overload taking a key/value pair matters: it only removes if the entry is still *this* lazy, so a failing caller can't evict a healthy replacement that another thread installed in the meantime.
+The `TryRemove` overload taking a `KeyValuePair` matters: it "removes a key and value from the dictionary" only if the pair matches what's currently stored,[^tryremove-kvp] so a failing caller can't evict a healthy replacement that another thread installed in the meantime.
 
 ### Cancellation
 
@@ -304,7 +311,7 @@ var shared = GetOrAddAsync(key, factory);
 return await shared.WaitAsync(callerToken);
 ```
 
-`Task.WaitAsync(CancellationToken)` lets an individual caller stop waiting without disturbing the underlying operation. The work continues, populates the cache, and the next caller benefits.
+`Task.WaitAsync(CancellationToken)`, added in .NET 6, lets an individual caller stop waiting without disturbing the underlying operation.[^waitasync] The work continues, populates the cache, and the next caller benefits.
 
 ### Comparing the two
 
@@ -324,7 +331,7 @@ The semaphore approach is still worth understanding, because the pattern general
 
 ### And now you don't have to
 
-.NET 9 shipped `HybridCache` in `Microsoft.Extensions.Caching.Hybrid`, and stampede protection is one of its headline features:
+`HybridCache`, in the `Microsoft.Extensions.Caching.Hybrid` package, does all of this for you, and stampede protection is one of its headline features:[^hybridcache]
 
 ```csharp
 var user = await hybridCache.GetOrCreateAsync(
@@ -333,7 +340,9 @@ var user = await hybridCache.GetOrCreateAsync(
     cancellationToken: ct);
 ```
 
-Concurrent callers for the same key are coalesced into one factory invocation. You also get a two-level cache (in-memory L1 in front of a distributed L2 like Redis), configurable serialization, and tag-based invalidation. Notably it handles stampede *across the L2 boundary* too, which no amount of `Lazy<Task<T>>` in one process will do for you — with ten instances behind a load balancer, per-process coalescing still lets ten queries through.
+The guarantee, stated precisely: "A `HybridCache` instance ensures that only one concurrent caller for a given key calls the factory method, and all other callers using the same instance wait for the result of that call."[^hybridcache] It also handles cancellation the way the hand-rolled version had to be taught to — "the cancellation token passed to the factory is canceled when all callers awaiting the shared operation have canceled", so one impatient caller doesn't kill the shared work. On top of that you get a two-level cache (in-memory L1 in front of a distributed L2 like Redis), configurable serialization, and tag-based invalidation.
+
+Read that guarantee carefully, though, because it contains a limit that's easy to miss: **the coordination is per instance.** The docs spell it out — "This coordination doesn't extend to other `HybridCache` instances, even if they use the same secondary distributed cache."[^hybridcache] So `HybridCache` solves the stampede *within* a process, exactly as `Lazy<Task<T>>` does, and no better across processes. Ten instances behind a load balancer will still send ten queries to your database when a hot key expires. An L2 narrows the window — whichever instance finishes first populates Redis, and the others may hit it on their next attempt — but nothing in the library serialises the factory across machines. If you need that, you need a distributed lock, and you need to decide whether the added failure mode is worth it.
 
 So the manual implementations above are not what you should write today. They're what's happening underneath the API you should be calling — and knowing that is the difference between using `HybridCache` and being able to reason about what it does when something goes wrong.
 
@@ -344,3 +353,16 @@ The through-line is that async is about *not occupying a thread while waiting*, 
 The cache is a good exercise because getting it right requires holding several of these at once — atomicity versus thread-safety, where a lock helps and where reframing removes the need for one, and what happens when the thing you cached is a failure.
 
 Next in the series: [LINQ, EF Core, and the SQL underneath]({{< relref "linq-ef-core-and-the-sql-underneath.md" >}}) — deferred execution, expression trees, and why an endpoint returning 50,000 rows takes fifteen seconds.
+
+[^async-threads]: Microsoft, ["The Task asynchronous programming model"](https://learn.microsoft.com/en-us/dotnet/csharp/asynchronous-programming/task-asynchronous-programming-model) — the "Threads" section states that `async`/`await` create no extra threads and that an async method doesn't run on its own thread.
+[^async-nowait]: Microsoft, ["The Task asynchronous programming model"](https://learn.microsoft.com/en-us/dotnet/csharp/asynchronous-programming/task-asynchronous-programming-model) — "If an async method doesn't use an `await` operator to mark a suspension point, the method executes as a synchronous method does… The compiler issues a warning for such methods."
+[^async-statemachine]: Microsoft, ["IAsyncStateMachine Interface"](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.compilerservices.iasyncstatemachine) — the compiler-generated type representing a suspended async method, and its `MoveNext` method.
+[^valuetask-rules]: Microsoft, ["ValueTask&lt;TResult&gt; Struct"](https://learn.microsoft.com/en-us/dotnet/api/system.threading.tasks.valuetask-1) — the list of operations that must never be performed, the "results are undefined" warning, and the guidance that `Task` should remain the default.
+[^threadpool-injection]: Microsoft, ["ThreadPool Class"](https://learn.microsoft.com/en-us/dotnet/api/system.threading.threadpool) — thread creation and destruction to optimise throughput, and the caution against raising `SetMinThreads`.
+[^getoradd-factory]: Microsoft, ["ConcurrentDictionary&lt;TKey,TValue&gt;.GetOrAdd Method"](https://learn.microsoft.com/en-us/dotnet/api/system.collections.concurrent.concurrentdictionary-2.getoradd) — the `valueFactory` runs outside the locks, `GetOrAdd` is not atomic, and the factory may be called multiple times.
+[^monitor-affinity]: Microsoft, ["Monitor Class"](https://learn.microsoft.com/en-us/dotnet/api/system.threading.monitor) — thread ownership of a synchronised block.
+[^foreachasync]: Microsoft, ["Parallel.ForEachAsync Method"](https://learn.microsoft.com/en-us/dotnet/api/system.threading.tasks.parallel.foreachasync) — introduced in .NET 6; overloads accepting `ParallelOptions`.
+[^lazy-mode]: Microsoft, ["LazyThreadSafetyMode Enum"](https://learn.microsoft.com/en-us/dotnet/api/system.threading.lazythreadsafetymode) — `ExecutionAndPublication` allows only one thread to initialise the instance.
+[^tryremove-kvp]: Microsoft, ["ConcurrentDictionary&lt;TKey,TValue&gt;.TryRemove Method"](https://learn.microsoft.com/en-us/dotnet/api/system.collections.concurrent.concurrentdictionary-2.tryremove) — the `KeyValuePair` overload removes only when the stored value matches.
+[^waitasync]: Microsoft, ["Task.WaitAsync Method"](https://learn.microsoft.com/en-us/dotnet/api/system.threading.tasks.task.waitasync) — added in .NET 6; completes when the task completes or the token is cancelled.
+[^hybridcache]: Microsoft, ["HybridCache library in ASP.NET Core"](https://learn.microsoft.com/en-us/aspnet/core/performance/caching/hybrid) — single-caller factory guarantee, factory cancellation semantics, and the explicit statement that coordination does not extend across `HybridCache` instances.

@@ -60,7 +60,7 @@ try
     _db.IdempotencyKeys.Add(new IdempotencyKey(key, status: InProgress));
     await _db.SaveChangesAsync();          // unique index on Key
 }
-catch (DbUpdateException ex) when (ex.IsUniqueViolation())
+catch (DbUpdateException ex) when (IsUniqueViolation(ex))   // your own helper
 {
     // Someone else owns this key — return their result, or 409 if still running.
     return await AwaitExistingResult(key);
@@ -95,7 +95,7 @@ This is the outbox pattern's core idea, and it's the standard answer to "how do 
 
 ### Timeouts
 
-Every outbound call needs one. The default `HttpClient` timeout is 100 seconds, which under load means threads and connections held for a minute and a half against a service that's already gone. Timeouts should be derived from the caller's own budget: if your endpoint must respond in 2 seconds, a downstream call cannot be allowed 30.
+Every outbound call needs one. The default `HttpClient` timeout is 100 seconds[^httpclient-timeout] — so under load, a dead dependency ties up connections and pending requests for over a minute and a half each before anything gives up. Timeouts should be derived from the caller's own budget: if your endpoint must respond in 2 seconds, a downstream call cannot be allowed 30.
 
 Timeout budgets should also *decrease* down the call chain. A request with a 5-second budget calling a service that allows itself 5 seconds leaves nothing for your own work or a retry.
 
@@ -116,7 +116,7 @@ builder.Services.AddHttpClient<IPaymentGateway, PaymentGateway>(c =>
 .AddStandardResilienceHandler();     // Microsoft.Extensions.Http.Resilience
 ```
 
-`AddStandardResilienceHandler` gives you rate limiting, total timeout, retry with backoff and jitter, circuit breaker, and per-attempt timeout in one line, built on Polly. Configure the numbers; don't hand-roll the pipeline.
+`AddStandardResilienceHandler` gives you, in this order, a rate limiter, a total request timeout, retry, a circuit breaker, and a per-attempt timeout — in one line, built on Polly.[^resilience] Configure the numbers; don't hand-roll the pipeline.
 
 ### Circuit breakers
 
@@ -149,7 +149,7 @@ A distributed system you can't observe is one you can't operate. The baseline:
 
 ### The pipeline
 
-A request passes through middleware in registration order and responses come back in reverse — a nesting of delegates, not a list. Order is behaviour: exception handling must be outermost to catch everything after it; authentication must precede authorization; CORS must precede anything that short-circuits.
+A request passes through middleware in registration order and responses come back in reverse — a nesting of delegates, not a list. Order is behaviour: exception handling must be outermost to catch everything after it; authentication must precede authorization; CORS must precede anything that short-circuits.[^middleware-order]
 
 **Middleware vs filters** comes down to scope. Middleware sits in the raw HTTP pipeline, runs for every request including static files, and knows nothing about MVC. Filters run inside MVC after routing and model binding, so they know the controller, the action, and the bound arguments. Cross-cutting infrastructure — correlation IDs, exception handling, compression — is middleware. Anything needing to know which action is executing or what the model is — validation, action-level authorization, result shaping — is a filter.
 
@@ -157,11 +157,11 @@ A request passes through middleware in registration order and responses come bac
 
 `new HttpClient()` per request is the classic .NET networking bug, and it fails in both directions.
 
-Each `HttpClient` owns a connection pool. Creating one per request and disposing it leaves sockets in `TIME_WAIT` for a couple of minutes, and under load you exhaust ephemeral ports — the symptom is `SocketException: Only one usage of each socket address is normally permitted`, appearing minutes into a load test on a machine that looks otherwise idle.
+Each `HttpClient` owns a connection pool. Creating one per request and disposing it leaves sockets in `TIME_WAIT` for a couple of minutes, and under load you exhaust ephemeral ports — the symptom is a `SocketException` reporting that only one usage of each socket address (protocol/network address/port) is normally permitted, appearing minutes into a load test on a machine that looks otherwise idle.
 
 The naive fix — one static `HttpClient` forever — leaks the opposite problem: the connection is never recycled, so it never picks up DNS changes. Point the hostname at a new IP during a failover and the client keeps talking to the old one indefinitely.
 
-`IHttpClientFactory` solves both by pooling the underlying `HttpMessageHandler` with a rotation lifetime (two minutes by default):
+`IHttpClientFactory` solves both by pooling the underlying `HttpMessageHandler` and rotating it on a lifetime that defaults to two minutes:[^httpclientfactory]
 
 ```csharp
 builder.Services.AddHttpClient<IPaymentGateway, PaymentGateway>(...);
@@ -192,7 +192,7 @@ With OpenTelemetry you largely get this via the trace ID, and preferring `tracep
 
 ### Rate limiting
 
-Built in since .NET 7, with four algorithms. **Fixed window** is simplest and allows a burst of 2× the limit across a window boundary. **Sliding window** smooths that. **Token bucket** allows controlled bursts while capping the sustained rate — usually the best fit for an API. **Concurrency** limits simultaneous requests rather than rate, which is the right tool for protecting a scarce downstream resource.
+Built in since .NET 7, with four algorithms.[^ratelimiting] **Fixed window** is simplest and allows a burst of 2× the limit across a window boundary. **Sliding window** smooths that. **Token bucket** allows controlled bursts while capping the sustained rate — usually the best fit for an API. **Concurrency** limits simultaneous requests rather than rate, which is the right tool for protecting a scarce downstream resource.
 
 ```csharp
 builder.Services.AddRateLimiter(o =>
@@ -214,13 +214,13 @@ Note that this is per-instance. Behind a load balancer with ten instances the ef
 
 ### Graceful shutdown
 
-On SIGTERM, the host stops accepting new requests and gives in-flight ones a window to finish — 30 seconds by default, configurable via `HostOptions.ShutdownTimeout`. Requests still running when it expires are killed.
+On SIGTERM, the host stops accepting new requests and gives in-flight ones a window to finish — 30 seconds by default, configurable via `HostOptions.ShutdownTimeout`.[^shutdown] Requests still running when it expires are killed.
 
 For this to work, `CancellationToken`s must be honoured throughout, `BackgroundService.ExecuteAsync` must observe its stopping token, and — the part usually missed — the readiness probe must start failing *before* shutdown begins, so the load balancer stops sending traffic while the pod is still draining. Without that gap you drop requests during every deployment.
 
 ### Streaming a 2GB upload
 
-The default model buffers: `IFormFile` reads the whole body into memory or a temp file before your action runs. At 2GB that's an immediate OOM, or several if requests overlap.
+The default model buffers: `IFormFile` buffers the whole body, in memory for small files and spooled to a temp file beyond a threshold, before your action runs.[^uploads] At 2GB that's an immediate OOM, or several if requests overlap.
 
 The fix is to never materialise it. Disable form value binding, read the multipart stream yourself, and copy through to the destination in chunks:
 
@@ -274,7 +274,7 @@ Many fast unit tests, fewer integration tests, very few end-to-end tests. The re
 
 Mock things you don't own and can't run: third-party APIs, payment gateways, email.
 
-Don't mock what you own, and don't mock the database. A test against a mocked `DbContext` verifies that you called the methods you called. It cannot catch a bad query, a missing index, a constraint violation, or a translation failure — the actual bugs. Use Testcontainers to run the real database in Docker; it's fast enough now that the tradeoff has genuinely changed. The in-memory provider is worse than nothing for query correctness, because it doesn't enforce constraints or share the real provider's translation rules, so it passes tests that production fails.
+Don't mock what you own, and don't mock the database. A test against a mocked `DbContext` verifies that you called the methods you called. It cannot catch a bad query, a missing index, a constraint violation, or a translation failure — the actual bugs. Use Testcontainers to run the real database in Docker; it's fast enough now that the tradeoff has genuinely changed. The in-memory provider is worse than nothing for query correctness — Microsoft's own guidance is that it "is not designed for performance testing" and that a real database should be used for testing queries, because it doesn't enforce relational constraints or share the provider's translation rules.[^ef-testing]
 
 Heavy mocking hurts in a specific way: tests become **coupled to implementation** rather than behaviour. Every refactor breaks them even though nothing observable changed, which teaches the team that failing tests mean "update the test." At that point the suite has negative value.
 
@@ -329,3 +329,12 @@ Pulling the thread back through:
 The unifying question, and the one worth asking of any design: **what happens when this fails halfway through?** Most of the patterns above are answers to it, and a design that has no answer isn't finished.
 
 That's the end of the series. Back to the [overview]({{< relref "dotnet-deep-dives.md" >}}).
+
+[^httpclient-timeout]: Microsoft, ["HttpClient.Timeout Property"](https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpclient.timeout) — "The default value is 100,000 milliseconds (100 seconds)."
+[^resilience]: Microsoft, ["Build resilient HTTP apps"](https://learn.microsoft.com/en-us/dotnet/core/resilience/http-resilience) — the standard resilience handler's five strategies and their order.
+[^httpclientfactory]: Microsoft, ["IHttpClientFactory with .NET"](https://learn.microsoft.com/en-us/dotnet/core/extensions/httpclient-factory) — handler pooling, the default two-minute handler lifetime, and the socket-exhaustion and stale-DNS problems it addresses.
+[^ratelimiting]: Microsoft, ["Rate limiting middleware in ASP.NET Core"](https://learn.microsoft.com/en-us/aspnet/core/performance/rate-limit) — the fixed window, sliding window, token bucket and concurrency limiters.
+[^shutdown]: Microsoft, ["HostOptions.ShutdownTimeout Property"](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.hosting.hostoptions.shutdowntimeout) — the default shutdown timeout.
+[^uploads]: Microsoft, ["Upload files in ASP.NET Core"](https://learn.microsoft.com/en-us/aspnet/core/mvc/models/file-uploads) — buffered versus streaming uploads, and reading multipart bodies with `MultipartReader`.
+[^middleware-order]: Microsoft, ["ASP.NET Core Middleware"](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/) — the documented middleware ordering and why it matters.
+[^ef-testing]: Microsoft, ["Testing EF Core Applications"](https://learn.microsoft.com/en-us/ef/core/testing/) and ["Testing without your production database system"](https://learn.microsoft.com/en-us/ef/core/testing/testing-without-the-database) — the limitations of the in-memory provider.

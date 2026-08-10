@@ -16,7 +16,7 @@ Dependency injection is about ownership of *lifetime* — how long a thing lives
 
 An exception says *this operation cannot complete and I can't decide what to do about it*. It's a transfer of responsibility up the stack to someone with enough context to choose.
 
-The usual guidance is "don't use exceptions for control flow," which is right but under-explained. The reason isn't purely cost — a thrown exception involves a stack walk and is roughly a thousand times more expensive than a return, but that only matters at volume. The stronger reason is that exceptions are **invisible in the signature**. A method returning `Order` claims to return an `Order`; that it might instead unwind the stack is documented nowhere the compiler can check.
+The usual guidance is "don't use exceptions for control flow," which is right but under-explained. The reason isn't purely cost. Throwing is genuinely expensive — it walks the stack to build a trace, and the guidance is explicit that you should "consider the performance implications" and avoid designs where exceptions occur routinely[^exception-guidelines] — but the multiplier depends so heavily on stack depth that a single figure would be misleading, and it only matters at volume anyway. The stronger reason is that exceptions are **invisible in the signature**. A method returning `Order` claims to return an `Order`; that it might instead unwind the stack is documented nowhere the compiler can check.
 
 So the useful split:
 
@@ -37,7 +37,7 @@ catch (Exception ex)
 }
 ```
 
-`throw ex;` rethrows the exception object as if it originated *here*. The original stack trace — the actual location of the bug — is overwritten. You keep the exception type and message, and lose the only information that tells you where to look.
+`throw ex;` rethrows the exception object as if it originated *here*.[^rethrow] The original stack trace — the actual location of the bug — is overwritten. You keep the exception type and message, and lose the only information that tells you where to look.
 
 ```csharp
 throw;             // preserves the original stack trace
@@ -106,7 +106,7 @@ In ASP.NET Core the request boundary is exception-handler middleware, registered
 app.UseExceptionHandler(...);   // outermost
 ```
 
-The modern form is `IExceptionHandler` (.NET 8+), which lets you register several and have each decide whether it handles a given exception:
+The modern form is `IExceptionHandler`, added in .NET 8, which lets you register several and have each decide whether it handles a given exception:[^iexceptionhandler]
 
 ```csharp
 public sealed class ValidationExceptionHandler : IExceptionHandler
@@ -116,7 +116,7 @@ public sealed class ValidationExceptionHandler : IExceptionHandler
     {
         if (ex is not ValidationException ve) return false;   // pass it on
 
-        await Results.ValidationProblem(ve.Errors)
+        await Results.ValidationProblem(ve.Errors)   // IDictionary<string, string[]>
                      .ExecuteAsync(ctx);
         return true;
     }
@@ -137,7 +137,7 @@ The container is a convenience on top of that. Constructor injection is the patt
 
 ### The three lifetimes
 
-- **Transient** — a new instance per resolution. Safe default. Cheap objects, no shared state.
+- **Transient** — a new instance per resolution. Safe default. Cheap objects, no shared state.[^di-lifetimes]
 - **Scoped** — one instance per scope, which in ASP.NET Core means per HTTP request. The right lifetime for anything carrying request state: `DbContext`, unit of work, the current user.
 - **Singleton** — one instance for the application. Expensive-to-create, stateless, or genuinely shared things: caches, `HttpClient` factories, configuration.
 
@@ -183,7 +183,7 @@ public sealed class OrderPoller : BackgroundService          // singleton
 
 This bites hardest in `BackgroundService`, which is registered as a singleton — the single most common place people accidentally capture a scoped dependency.
 
-The container will catch some of this for you. Scope validation (`ValidateScopes`, on by default in Development) throws when a singleton resolves a scoped service. `ValidateOnBuild` moves the check to startup. Both are worth enabling in every environment: a startup failure beats an `ObjectDisposedException` under production load.
+The container will catch some of this for you. Scope validation (`ValidateScopes`) throws when a singleton resolves a scoped service, and `ValidateOnBuild` moves the check to startup; the default host enables both in the Development environment.[^di-validation] Both are worth enabling in every environment: a startup failure beats an `ObjectDisposedException` under production load.
 
 The reverse — a scoped or transient service depending on a singleton — is always fine, since the singleton outlives them.
 
@@ -204,7 +204,7 @@ The legitimate uses are narrow: resolving a scope inside a singleton (as above),
 
 Configuration binding, with three flavours that differ by lifetime:
 
-- `IOptions<T>` — singleton, read once at startup. Fine for settings that never change.
+- `IOptions<T>` — singleton, read once at startup. Fine for settings that never change.[^options]
 - `IOptionsSnapshot<T>` — scoped, re-read per request. Picks up config changes without a restart.
 - `IOptionsMonitor<T>` — singleton with change notifications. The one to use inside another singleton, since `IOptionsSnapshot` can't be injected there.
 
@@ -233,3 +233,10 @@ A failure should be handled by the layer that knows what it means — which is u
 Most bugs in both categories come from a component taking on responsibility it doesn't have the context to discharge: catching an exception it can't do anything about, or holding a dependency past the point where it's still valid.
 
 Next: [designing an API that survives failure]({{< relref "designing-an-api-that-survives-failure.md" >}}) — where these boundaries meet the network.
+
+[^exception-guidelines]: Microsoft, ["Best practices for exceptions"](https://learn.microsoft.com/en-us/dotnet/standard/exceptions/best-practices-for-exceptions) — performance considerations, and designing so exceptions aren't part of normal flow.
+[^rethrow]: Microsoft, ["How to use the try/catch block to catch exceptions"](https://learn.microsoft.com/en-us/dotnet/standard/exceptions/how-to-use-the-try-catch-block-to-catch-exceptions) — rethrowing with `throw;` preserves the original stack trace.
+[^iexceptionhandler]: Microsoft, ["Handle errors in ASP.NET Core"](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/error-handling) — `IExceptionHandler`, `AddExceptionHandler`, and handler ordering.
+[^di-lifetimes]: Microsoft, ["Dependency injection in ASP.NET Core"](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection) — transient, scoped and singleton lifetimes, and the captive-dependency warning against resolving scoped services from singletons.
+[^di-validation]: Microsoft, ["Dependency injection in .NET"](https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection) — `ValidateScopes` and `ValidateOnBuild`, enabled by default in the Development environment.
+[^options]: Microsoft, ["Options pattern in ASP.NET Core"](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/configuration/options) — lifetimes of `IOptions`, `IOptionsSnapshot` and `IOptionsMonitor`, and `ValidateOnStart`.

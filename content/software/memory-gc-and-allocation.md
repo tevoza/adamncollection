@@ -20,15 +20,15 @@ So the heap is split by age:
 - **Gen 1** — survivors of a Gen 0 collection. A buffer between short-lived and long-lived.
 - **Gen 2** — survivors of Gen 1. Long-lived objects. Collected rarely and expensively, because it means walking the whole heap.
 
-A Gen 0 collection is fast for a reason worth understanding: cost is proportional to the number of **surviving** objects, not the number of dead ones. Dead objects cost nothing to collect — the collector traces from the roots, copies out what's alive, and treats everything else as free space. Allocating a million short-lived objects that all die is genuinely cheap.
+A Gen 0 collection is fast for a reason worth understanding: cost is proportional to the number of **surviving** objects, not the number of dead ones. Dead objects cost nothing to collect — the collector traces from the roots, copies out what's alive, and treats everything else as free space. Allocating a million short-lived objects that all die is genuinely cheap.[^gc-fundamentals]
 
 What's expensive is objects that survive long enough to be **promoted**. Every promotion moves work into a more expensive generation. This inverts the intuitive advice: the problem isn't allocating a lot, it's *keeping* a lot.
 
 ### The Large Object Heap
 
-Objects of 85,000 bytes or more go on the **Large Object Heap** instead — in practice, arrays of any real size. A `byte[100_000]`, a `List<T>` that has grown past the threshold, a large string.
+Objects of 85,000 bytes or more go on the **Large Object Heap** instead — in practice, arrays of any real size. A `byte[100_000]`, a `List<T>` that has grown past the threshold, a large string. The docs are precise about the boundary: "If an object is greater than or equal to 85,000 bytes in size, it's considered a large object",[^loh] and the figure "was determined by performance tuning" rather than any hardware constraint — it's adjustable via `System.GC.LOHThreshold`.[^gc-config]
 
-Two properties make the LOH a common source of trouble. It's collected only with Gen 2, so large objects hang around far longer than their lifetime suggests. And it is **not compacted by default** — freed blocks leave holes, and the allocator reuses them only when a new object fits.
+Two properties make the LOH a common source of trouble. "Large objects belong to generation 2 because they are collected only during a generation 2 collection",[^loh] so they hang around far longer than their lifetime suggests. And it is **not compacted by default** — "because compaction is expensive, the GC *sweeps* the LOH; it makes a free list out of dead objects that can be reused later",[^loh] so freed blocks leave holes that get reused only when a new object fits.
 
 That produces the failure mode people find surprising: a process with plenty of free memory that still throws `OutOfMemoryException`, because the free memory is scattered in fragments and nothing is contiguous enough for a 2MB array. You can force compaction with `GCSettings.LargeObjectHeapCompactionMode`, but it's a full blocking collection and a stopgap, not a fix. The real fix is not to churn large arrays — which is what `ArrayPool<T>` is for.
 
@@ -50,7 +50,7 @@ At the closing brace, `Dispose` runs and **the file handle is released**. The `F
 
 `Dispose` releases resources. The GC releases memory. `using` does the first and says nothing about the second.
 
-Finalizers are the safety net, and a bad one. An object with a finalizer can't be collected on the first pass — it goes on the finalizer queue, gets processed by a dedicated thread, and is only collectable on the *next* collection. That guarantees promotion, which is why the guidance is to implement a finalizer only when directly holding unmanaged resources, and to call `GC.SuppressFinalize(this)` in `Dispose` so the correct path skips the queue entirely.
+Finalizers are the safety net, and a bad one. An object with a finalizer can't be collected on the first pass — it goes on the finalizer queue, gets processed by a dedicated thread, and is only collectable on the *next* collection. That guarantees promotion, which is why the guidance is to implement a finalizer only when directly holding unmanaged resources, and to call `GC.SuppressFinalize(this)` in `Dispose` so the correct path skips the queue entirely.[^finalizers]
 
 `IAsyncDisposable` exists because `Dispose` is synchronous and some cleanup is genuinely I/O — flushing a buffer to disk, sending a close frame on a WebSocket, committing a transaction. Doing that in a synchronous `Dispose` means blocking, which in an async application means the thread-pool starvation described in the [async post]({{< relref "async-concurrency-and-a-thread-safe-cache.md" >}}). `await using` gives cleanup somewhere to await.
 
@@ -121,7 +121,7 @@ static (ReadOnlySpan<char> Key, ReadOnlySpan<char> Value) ParseSpan(ReadOnlySpan
 }
 ```
 
-Slicing a span is pointer arithmetic: a new struct holding a reference and a length. No copy, no allocation, no GC pressure.
+Slicing a span is pointer arithmetic: a new struct holding a reference and a length. No copy, no allocation, no GC pressure.[^span]
 
 `Span<T>` is a `ref struct`, so it's stack-only and can't be stored in a field, boxed, or captured — [the language mechanics post]({{< relref "csharp-language-mechanics.md" >}}) covers why those constraints exist. `Memory<T>` is the heap-friendly counterpart for when you need to hold a window across an `await`; you call `.Span` on it at the point of use.
 
@@ -145,7 +145,7 @@ finally
 }
 ```
 
-This keeps large arrays off the LOH and out of Gen 2. Three things to get right: the returned array is usually bigger than you asked for, so never use `buffer.Length` as the logical size; `Return` belongs in a `finally`; and pass `clearArray: true` if the buffer held anything sensitive, because the next renter sees whatever you left behind. Using a buffer after returning it is a genuinely nasty bug — another component may already have it.
+This keeps large arrays off the LOH and out of Gen 2. Three things to get right: the returned array is usually bigger than you asked for, so never use `buffer.Length` as the logical size; `Return` belongs in a `finally`; and pass `clearArray: true` if the buffer held anything sensitive, because the next renter sees whatever you left behind. Using a buffer after returning it is a genuinely nasty bug — another component may already have it.[^arraypool]
 
 ### Strings
 
@@ -153,7 +153,7 @@ String concatenation in a loop is the textbook allocation mistake: strings are i
 
 `StringBuilder` maintains a growable buffer and copies once at the end. But it's not free — it allocates the builder and its chunks — so for a small fixed number of pieces it's slower than the alternatives.
 
-Roughly: a fixed, small number of parts → interpolation (`$"{a}-{b}"`), which the compiler lowers to an efficient `DefaultInterpolatedStringHandler` that often avoids intermediate strings entirely. A loop or an unknown count → `StringBuilder`. Joining a collection → `string.Join`, which sizes the result correctly in one pass.
+Roughly: a fixed, small number of parts → interpolation (`$"{a}-{b}"`), which from C# 10 the compiler lowers using `DefaultInterpolatedStringHandler`, often avoiding intermediate strings entirely[^interpolation]. A loop or an unknown count → `StringBuilder`. Joining a collection → `string.Join`, which sizes the result correctly in one pass.
 
 Note that interpolation in **logging** deserves separate care. `_logger.LogDebug($"user {id} did {thing}")` builds the string *before* the call, so it costs even when debug logging is disabled. The template form, `_logger.LogDebug("user {Id} did {Thing}", id, thing)`, defers formatting and gives you structured fields — though the arguments still box if they're value types.
 
@@ -161,7 +161,7 @@ Note that interpolation in **logging** deserves separate care. `_logger.LogDebug
 
 Reasoning about allocation is useful; measuring it is what actually resolves questions.
 
-For a quick answer in a test or a scratch app, `GC.GetAllocatedBytesForCurrentThread()` around a block gives an exact byte count, which is how the boxing numbers in the [language mechanics post]({{< relref "csharp-language-mechanics.md" >}}) were produced. For anything serious, BenchmarkDotNet with `[MemoryDiagnoser]` reports allocations per operation alongside timings, and it handles the warmup and statistics you'd otherwise get wrong.
+For a quick answer in a test or a scratch app, `GC.GetAllocatedBytesForCurrentThread()` around a block gives a byte count[^allocated-bytes], which is how the boxing numbers in the [language mechanics post]({{< relref "csharp-language-mechanics.md" >}}) were produced. For anything serious, BenchmarkDotNet with `[MemoryDiagnoser]` reports allocations per operation alongside timings, and it handles the warmup and statistics you'd otherwise get wrong.
 
 For a running process, `dotnet-counters` gives you live Gen 0/1/2 collection counts, heap size, and allocation rate with no setup. `dotnet-gcdump` captures a heap snapshot you can open in Visual Studio to see what's retaining what — which is the tool for a leak, because the question with a leak is never "what's allocated" but "what's still holding a reference to it."
 
@@ -177,6 +177,19 @@ Collecting the answers:
 - **Unmanaged memory** — native handles, unmanaged buffers, memory-mapped files — isn't GC-visible at all. A leaked handle shows in process RSS and not in the managed heap.
 - The GC is **deliberately not collecting**, because Server GC on a machine with plenty of RAM sees no reason to. High memory usage is not the same as a memory problem.
 
-That last one is worth ending on. Server GC trades memory for throughput on purpose, and a container showing steadily high memory may be a perfectly healthy process behaving as designed — right up until it meets a container memory limit and gets killed. Configuring the GC's heap limit to match the container limit is not optional in Kubernetes, and it's the one memory setting most services get wrong.
+That last one is worth ending on. Server GC trades memory for throughput on purpose, and a container showing steadily high memory may be a perfectly healthy process behaving as designed.
+
+It's often claimed you must configure the GC's heap limit by hand in Kubernetes. That advice is out of date. The runtime detects a memory-constrained environment and treats the container limit as total physical memory, defaulting the heap hard limit to **75%** of it.[^gc-config] Two more defaults have moved in the same direction: DATAS, which sizes the heap to roughly the long-lived data rather than the machine, is on by default from .NET 9,[^gc-config] and the GC becomes more aggressive about full compacting collections once memory load hits about 90%.[^gc-config]
+
+So the setting you're most likely to actually need is `System.GC.HeapHardLimitPercent`, and only when you want the heap *smaller* than the default 75% — because something else in the container also needs memory. Reach for it deliberately, not as boilerplate.
 
 Next: [DI, lifetimes, and failure boundaries]({{< relref "di-lifetimes-and-failure-boundaries.md" >}}).
+
+[^loh]: Microsoft, ["Large object heap (LOH)"](https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/large-object-heap) — the 85,000-byte threshold, LOH collection with gen 2, sweeping rather than compaction, and the allocation/collection cost model.
+[^gc-config]: Microsoft, ["Garbage collector config settings"](https://learn.microsoft.com/en-us/dotnet/core/runtime-config/garbage-collector) — `System.GC.LOHThreshold`; the 75% default heap hard limit percent in a memory-constrained environment; the ~90% high-memory threshold; DATAS enabled by default from .NET 9.
+[^gc-fundamentals]: Microsoft, ["Fundamentals of garbage collection"](https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/fundamentals) — generations, promotion of survivors, and what triggers a collection.
+[^finalizers]: Microsoft, ["Cleaning up unmanaged resources"](https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/unmanaged) and ["Object.Finalize"](https://learn.microsoft.com/en-us/dotnet/api/system.object.finalize) — finalization requires at least two collections, and `GC.SuppressFinalize` removes the object from the finalization queue.
+[^span]: Microsoft, ["System.Span&lt;T&gt;"](https://learn.microsoft.com/en-us/dotnet/api/system.span-1) and ["Memory&lt;T&gt; and Span&lt;T&gt; usage guidelines"](https://learn.microsoft.com/en-us/dotnet/standard/memory-and-spans/memory-t-usage-guidelines) — stack-only semantics, slicing without copying, and when to prefer `Memory<T>`.
+[^arraypool]: Microsoft, ["ArrayPool&lt;T&gt; Class"](https://learn.microsoft.com/en-us/dotnet/api/system.buffers.arraypool-1) — `Rent` may return an array longer than requested, and `Return`'s `clearArray` parameter.
+[^interpolation]: Microsoft, ["String interpolation in C#"](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/tokens/interpolated) — from C# 10 the compiler lowers interpolated strings using `DefaultInterpolatedStringHandler`.
+[^allocated-bytes]: Microsoft, ["GC.GetAllocatedBytesForCurrentThread"](https://learn.microsoft.com/en-us/dotnet/api/system.gc.getallocatedbytesforcurrentthread) — total bytes allocated on the current thread, used for the allocation figures quoted in this series.
