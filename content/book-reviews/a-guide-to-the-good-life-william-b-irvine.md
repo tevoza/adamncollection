@@ -16,15 +16,16 @@ The idea: steering your present behaviour according to a ruleboook, ie a **Philo
 
 The risk is that if we refuse to take on a considered and coherent philosophy of life, then we are likely to *mislive*.
 More precisely, stumble aimlessly reacting and acting in accordance with biological/genetic programming.
-Pursuing and valuing rewards afforded to us via genetic programming; sex, fame, wealth and pleasure - all of which are insatiable and leave no lasting meaning.
+Pursuing and valuing rewards afforded to us via genetic programming; sex, fame, wealth and pleasure - all of which are insatiable and leave no lasting value.
 Always wanting a slightly better car, or larger house or larger screen, finding that what you currently have is never quite good enough...
 Religion seems to correlate these pursuits with sin.
-And being consumed by situations we are programmed to be bothered by, allowing primitive emotions such as anger, jealousy, envy etc govern our mentality and response.
+Being consumed by situations we are programmed to be bothered by, allowing primitive emotions such as anger, jealousy, envy etc govern our mentality and response.
 For example, the anger experienced when being insulted.
 
 The genetic programming is flawwed and can allow you to self-inflict unnecessary suffering.
 As mankind we are fortunately gifted the ability to reason beyond genetic programming towards that which is more meaningful.
 But the effort comes in exercising that ability.
+That which is genetic and instinctive requires active effort to overcome.
 
 A prevailing philosophy in society today seems to be "enlightened hedonism": Optimizing for pleasure while making sacrifices to keep it sustainable and socially acceptable.
 Very much an embrace of genetic programming with occasional dampeners.
