@@ -52,7 +52,7 @@ experience:
     location: "Johannesburg, South Africa"
     points:
       - "Backend specialist focused on reliable, high-performance payment applications, with earlier full-stack experience building React/TypeScript frontends."
-      - "Work across every part of the system, from .NET platform upgrades and deployment configuration to Azure DevOps YAML pipelines, a favourite area to tinker with and improve."
+      - "Work across every part of the system, from feature development to infrastructure and deployment plumbing, including Azure DevOps YAML pipelines."
       - "**Banking and payments:** Take increasing ownership of payment services in a microservices architecture using C#/.NET, SQL Server and PostgreSQL, including instant payments products, API orchestration, callbacks and client onboarding."
       - "Investigate production issues through application behaviour, logs and Kubernetes configuration, and help mitigate service availability problems."
       - "Use AI-assisted development to quickly automate small, recurring support tasks, turning manual processes into reusable tools adopted by teammates."
