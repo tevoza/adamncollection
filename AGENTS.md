@@ -16,5 +16,6 @@ There is no test suite, no linter, and no package manager here. Don't add one, a
 
 - No theme, no theme submodule. `layouts/` is hand-rolled on purpose — don't introduce a theme dependency.
 - Content only lives under `content/<section>/`. New sections need a menu entry in `hugo.toml` and a matching `_index.md`.
+- `content/cv/` is the one exception: a link-only page that never goes in the menu or any list. See `ARCHITECTURE.md`.
 - `learning/` is never published to the site. Don't reference it from `content/`, `layouts/`, or `hugo.toml`'s menu.
 - Never flip a post's front matter from `draft: true` to `draft: false` unless asked — that's a publish decision.

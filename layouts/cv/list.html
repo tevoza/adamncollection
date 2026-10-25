@@ -1,0 +1,103 @@
+{{- /*
+  Standalone CV page. Deliberately does not use baseof.html, so it carries
+  none of the blog's header, nav or footer. Content lives in
+  content/cv/_index.md.
+*/ -}}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>{{ .Title }} | CV</title>
+    <meta name="description" content="{{ .Description }}" />
+    {{- /* Inlined so no stylesheet is published that would point to this page. */}}
+    <style>{{ (resources.Get "css/cv.css" | minify).Content | safeCSS }}</style>
+  </head>
+  <body>
+    {{- /* "Save as PDF" in the print dialog uses the A4 @media print rules in cv.css. */}}
+    <button class="cv-print" type="button" onclick="window.print()">Download PDF</button>
+    <main class="cv">
+      <header class="cv-header">
+        {{ with .Params.photo }}{{ with $.Resources.Get . }}
+          <img class="cv-photo" src="{{ .RelPermalink }}" width="160" height="160" alt="{{ $.Title }}" />
+        {{ end }}{{ end }}
+        <div class="cv-heading">
+        <h1>{{ .Title }}</h1>
+        <p class="cv-tagline">{{ .Description }}</p>
+        {{ with .Params.contact }}
+          <ul class="cv-contact">
+            {{ with .email }}<li><a href="mailto:{{ . }}">{{ . }}</a></li>{{ end }}
+            {{ with .phone }}<li><a href="tel:{{ replace . "-" "" }}">{{ . }}</a></li>{{ end }}
+            {{ with .location }}<li>{{ . }}</li>{{ end }}
+            {{ with .linkedin }}<li><a href="https://www.linkedin.com/in/{{ . }}">linkedin.com/in/{{ . }}</a></li>{{ end }}
+            {{ with .github }}<li><a href="https://github.com/{{ . }}">github.com/{{ . }}</a></li>{{ end }}
+          </ul>
+        {{ end }}
+        </div>
+      </header>
+
+      <div class="cv-columns">
+        <aside class="cv-side">
+          <section>
+            <h2>Technical Skills</h2>
+            {{ range .Params.skills }}
+              <h3>{{ .group }}</h3>
+              <ul class="cv-tags">
+                {{ range .items }}<li>{{ . }}</li>{{ end }}
+              </ul>
+            {{ end }}
+          </section>
+
+          <section>
+            <h2>Core Areas</h2>
+            <ul class="cv-tags">
+              {{ range .Params.coreAreas }}<li>{{ . }}</li>{{ end }}
+            </ul>
+          </section>
+
+          <section>
+            <h2>Languages</h2>
+            <dl class="cv-langs">
+              {{ range .Params.languages }}
+                <dt>{{ .name }}</dt>
+                <dd>{{ .level }}</dd>
+              {{ end }}
+            </dl>
+          </section>
+        </aside>
+
+        <div class="cv-body">
+          <section>
+            <h2>Profile</h2>
+            <div class="cv-profile">{{ .Content }}</div>
+          </section>
+
+          {{ range slice (dict "heading" "Experience" "events" .Params.experience) (dict "heading" "Education" "events" .Params.education) }}
+            <section>
+              <h2>{{ .heading }}</h2>
+              {{ range .events }}
+                <article class="cv-event">
+                  <h3>{{ .role }}</h3>
+                  <p class="cv-org">{{ .org }}</p>
+                  <p class="cv-meta">{{ with .dates }}<span>{{ . }}</span>{{ end }}{{ with .location }}<span>{{ . }}</span>{{ end }}</p>
+                  <ul>
+                    {{ range .points }}<li>{{ . | markdownify }}</li>{{ end }}
+                  </ul>
+                </article>
+              {{ end }}
+            </section>
+          {{ end }}
+
+          <section>
+            <h2>Additional Training</h2>
+            <ul>
+              {{ range .Params.training }}<li>{{ . | markdownify }}</li>{{ end }}
+            </ul>
+          </section>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

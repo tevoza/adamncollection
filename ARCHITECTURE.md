@@ -33,11 +33,21 @@ No theme, no theme submodule — `layouts/` is hand-written:
 - `layouts/index.html` — homepage: hero, hand-built section cards for `software`/`thoughts`/`food`/`book-reviews` with live entry counts, and the 6 most recent posts site-wide.
 - `layouts/_default/list.html` — section/list pages (e.g. `/software/`): entry count + list of pages in that section, newest first.
 - `layouts/_default/single.html` — a single entry: date, title, description, tags, content.
+- `layouts/cv/list.html` — the CV at `/cv/` (see below). Standalone: it doesn't use `baseof.html`.
 
-Styling is two hand-written stylesheets, both linked from `baseof.html`. No CSS build step, no bundler.
+Styling is hand-written CSS with no bundler. `site.css` and `chroma.css` are linked from `baseof.html`; the CV has its own.
 
 - `static/css/site.css` — the site's own layout and typography, with the colour palette as `:root` custom properties.
 - `static/css/chroma.css` — syntax highlighting token colours for code blocks, defined against that same palette. Required because `[markup.highlight] noClasses = false` makes Hugo emit CSS classes rather than inline styles, so without these rules code renders unhighlighted. `hugo gen chromastyles --style=<name>` generates an equivalent file if you'd rather not hand-maintain it.
+- `assets/css/cv.css` — the CV page's own stylesheet. Not linked: `layouts/cv/list.html` inlines it via Hugo Pipes (`resources.Get | minify`), so it must stay in `assets/`, not `static/`.
+
+## CV page (`/cv/`)
+
+`content/cv/_index.md` holds the CV as structured front matter (contact, skills, experience, education, training) with the profile paragraph as body, plus `photo.jpg` alongside it. The page is shared by direct link and doesn't advertise the blog, but isn't secret: the URL contains the repo name and the source is in this public repo.
+
+- `build.list: never` keeps it out of every page collection (homepage, `/posts/`, section counts); `sitemap.disable` and `outputs: ["HTML"]` keep it out of the sitemap and RSS. Nothing in the menu or templates links to it.
+- `layouts/cv/list.html` renders a complete page without `baseof.html` and sets `noindex, nofollow` and `no-referrer`. Its "Download PDF" button opens the print dialog; the `@media print` rules in `cv.css` lay it out on A4.
+- `photo.jpg` is committed already resized and metadata-free, and published as-is — keep any replacement small.
 
 ## Config (`hugo.toml`)
 
