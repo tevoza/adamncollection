@@ -51,7 +51,7 @@ experience:
     dates: "January 2022 – Present"
     location: "Johannesburg, South Africa"
     points:
-      - "Backend specialist focused on reliable, high-performance payment applications, with earlier full-stack experience building React/TypeScript frontends."
+      - "Backend specialist focused on reliable payment applications, with earlier full-stack experience building React/TypeScript frontends."
       - "Work across every part of the system, from feature development to infrastructure and deployment plumbing, including Azure DevOps YAML pipelines."
       - "**Banking and payments:** Take increasing ownership of payment services in a microservices architecture using C#/.NET, SQL Server and PostgreSQL, including instant payments products, API orchestration, callbacks and client onboarding."
       - "Investigate production issues through application behaviour, logs and Kubernetes configuration, and help mitigate service availability problems."
@@ -88,4 +88,4 @@ training:
   - "Cisco CCNA 1: Introduction to Networks, North-West University Engineering Faculty (2021)."
 ---
 
-Software engineer with nearly five years of experience building and supporting enterprise systems, most recently backend payment services for banking. Comfortable owning work from requirements through to deployment and production support. Keen interest in Linux and cloud-native deployment, including Docker and Kubernetes.
+Software engineer with nearly five years of experience building and supporting enterprise systems, most recently high-performance backend payment services for banking. Enjoys taking ownership of problems and driving solutions from requirements through to production. Keen interest in Linux and cloud-native deployment, including Docker and Kubernetes.
