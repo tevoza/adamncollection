@@ -15,6 +15,10 @@ outputs: ["HTML"]
 # metadata; omitted from the page if missing.
 photo: "photo.jpg"
 
+# Built next to the page by .github/workflows/hugo.yml; the download link
+# points here.
+pdf: "Adam-Coetzee-CV.pdf"
+
 contact:
   email: "adam.coetzee@gmail.com"
   phone: "+27-72-174-5065"

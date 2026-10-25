@@ -46,7 +46,7 @@ Styling is hand-written CSS with no bundler. `site.css` and `chroma.css` are lin
 `content/cv/_index.md` holds the CV as structured front matter (contact, skills, experience, education, training) with the profile paragraph as body, plus `photo.jpg` alongside it. The page is shared by direct link and doesn't advertise the blog, but isn't secret: the URL contains the repo name and the source is in this public repo.
 
 - `build.list: never` keeps it out of every page collection (homepage, `/posts/`, section counts); `sitemap.disable` and `outputs: ["HTML"]` keep it out of the sitemap and RSS. Nothing in the menu or templates links to it.
-- `layouts/cv/list.html` renders a complete page without `baseof.html` and sets `noindex, nofollow` and `no-referrer`. Its "Download PDF" button opens the print dialog; the `@media print` rules in `cv.css` lay it out on A4.
+- `layouts/cv/list.html` renders a complete page without `baseof.html` and sets `noindex, nofollow` and `no-referrer`. Its "Download PDF" link points to a PDF that the deploy workflow prints from the built page with headless Chrome, using the A4 `@media print` rules in `cv.css` (so the link 404s under `hugo server`). The filename appears in both `content/cv/_index.md` (`pdf`) and `.github/workflows/hugo.yml`; keep them in sync.
 - `photo.jpg` is committed already resized and metadata-free, and published as-is — keep any replacement small.
 
 ## Config (`hugo.toml`)
@@ -58,7 +58,7 @@ Styling is hand-written CSS with no bundler. `site.css` and `chroma.css` are lin
 
 ## Build & deploy
 
-`.github/workflows/hugo.yml` runs on push to `main` (and manual dispatch): sets up Hugo **extended**, version pinned via the `HUGO_VERSION` env var, builds with `hugo --gc --minify`, and deploys via GitHub's official `actions/configure-pages` + `actions/upload-pages-artifact` + `actions/deploy-pages` (not a third-party gh-pages action). Locally, `hugo server -D` serves the site with drafts included.
+`.github/workflows/hugo.yml` runs on push to `main` (and manual dispatch): sets up Hugo **extended**, version pinned via the `HUGO_VERSION` env var, builds with `hugo --gc --minify`, prints the CV PDF into `public/cv/`, and deploys via GitHub's official `actions/configure-pages` + `actions/upload-pages-artifact` + `actions/deploy-pages` (not a third-party gh-pages action). Locally, `hugo server -D` serves the site with drafts included.
 
 ## `learning/`
 
