@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 560" role="img" aria-labelledby="t">
+  <title id="t">TLS 1.3 handshake with client authentication. It is the normal handshake plus three messages: the server sends CertificateRequest listing acceptable CAs, and the client answers with its own Certificate chain and a CertificateVerify signature before its Finished. The server then validates the client's chain against its configured client CAs</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
+    .muted { fill: #9baeca; font-size: 11.5px; }
+    .new { fill: #c084fc; }
+    .newm { fill: #c084fc; font-size: 11.5px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .band { fill: #13233b; stroke: #3a4d6b; stroke-width: 1; stroke-dasharray: 4 3; }
+    .bandn { fill: #13233b; stroke: #c084fc; stroke-width: 1; stroke-dasharray: 4 3; }
+    .life { fill: none; stroke: #3a4d6b; stroke-width: 1.5; }
+    .p { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+    .e { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .n { fill: none; stroke: #c084fc; stroke-width: 2; }
+  </style>
+  <defs>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/></marker>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/></marker>
+    <marker id="n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c084fc"/></marker>
+  </defs>
+  <rect width="760" height="560" fill="#08111f"/>
+
+  <rect class="box" x="60" y="20" width="120" height="36" rx="5"/>
+  <text x="120" y="43" text-anchor="middle">client</text>
+  <rect class="box" x="580" y="20" width="120" height="36" rx="5"/>
+  <text x="640" y="43" text-anchor="middle">server</text>
+  <path class="life" d="M120 56 V516 M640 56 V516"/>
+
+  <text x="150" y="88">ClientHello</text>
+  <path class="p" d="M122 96 H636" marker-end="url(#m)"/>
+  <text x="150" y="124">ServerHello</text>
+  <path class="p" d="M638 132 H124" marker-end="url(#m)"/>
+
+  <text x="150" y="160">{EncryptedExtensions}</text>
+  <path class="e" d="M638 168 H124" marker-end="url(#a)"/>
+  <text class="new" x="150" y="192">{CertificateRequest}</text>
+  <text class="newm" x="610" y="192" text-anchor="end">acceptable CAs · sig algorithms</text>
+  <path class="n" d="M638 200 H124" marker-end="url(#n)"/>
+  <text x="150" y="224">{Certificate}</text>
+  <text class="muted" x="610" y="224" text-anchor="end">server's chain</text>
+  <path class="e" d="M638 232 H124" marker-end="url(#a)"/>
+  <text x="150" y="256">{CertificateVerify}</text>
+  <path class="e" d="M638 264 H124" marker-end="url(#a)"/>
+  <text x="150" y="288">{Finished}</text>
+  <path class="e" d="M638 296 H124" marker-end="url(#a)"/>
+
+  <rect class="band" x="132" y="310" width="496" height="28" rx="4"/>
+  <text class="muted" x="380" y="328" text-anchor="middle">client validates the server, exactly as in normal TLS</text>
+
+  <text class="new" x="150" y="364">{Certificate}</text>
+  <text class="newm" x="610" y="364" text-anchor="end">client's leaf + intermediates</text>
+  <path class="n" d="M122 372 H636" marker-end="url(#n)"/>
+  <text class="new" x="150" y="396">{CertificateVerify}</text>
+  <text class="newm" x="610" y="396" text-anchor="end">signed with client's private key</text>
+  <path class="n" d="M122 404 H636" marker-end="url(#n)"/>
+  <text x="150" y="428">{Finished}</text>
+  <path class="e" d="M122 436 H636" marker-end="url(#a)"/>
+
+  <rect class="bandn" x="132" y="450" width="496" height="28" rx="4"/>
+  <text class="newm" x="380" y="468" text-anchor="middle">server validates client chain against its client-CA list</text>
+
+  <text x="150" y="500">[application data]</text>
+  <path class="e" d="M126 508 H634" marker-start="url(#a)" marker-end="url(#a)"/>
+
+  <text class="muted" x="380" y="544" text-anchor="middle">purple: what mutual TLS adds · { } handshake keys · [ ] traffic keys</text>
+</svg>

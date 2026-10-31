@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" role="img" aria-labelledby="t">
+  <title id="t">Getting a certificate. On your machine you generate a private key, then a CSR containing the public key and requested identity, signed with the private key. Only the CSR goes to the CA, which checks the identity and returns a certificate signed with the CA's key. The certificate and the private key, which never left your machine, are then used together</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
+    .small { font-size: 12px; }
+    .muted { fill: #9baeca; font-size: 11.5px; }
+    .prv { fill: #c084fc; font-size: 11.5px; }
+    .region { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .kprv { fill: #13233b; stroke: #c084fc; stroke-width: 2; }
+    .f { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+    .w { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+  </style>
+  <defs>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/></marker>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/></marker>
+  </defs>
+  <rect width="760" height="360" fill="#08111f"/>
+
+  <rect class="region" x="12" y="16" width="440" height="328" rx="8"/>
+  <text class="muted" x="24" y="34">your machine / key vault</text>
+  <rect class="region" x="500" y="16" width="248" height="328" rx="8"/>
+  <text class="muted" x="512" y="34">certificate authority</text>
+
+  <rect class="kprv" x="28" y="50" width="170" height="64" rx="5"/>
+  <text x="113" y="74" text-anchor="middle">1. private key</text>
+  <text class="prv" x="113" y="94" text-anchor="middle">never leaves here</text>
+
+  <path class="f" d="M198 82 H232" marker-end="url(#m)"/>
+  <rect class="box" x="236" y="50" width="200" height="98" rx="5"/>
+  <text x="336" y="72" text-anchor="middle">2. CSR</text>
+  <text class="small" x="248" y="94">public key</text>
+  <text class="small" x="248" y="112">subject + SAN</text>
+  <text class="muted" x="248" y="132">signed with private key</text>
+
+  <path class="w" d="M436 99 H576 V126" marker-end="url(#a)"/>
+  <text class="muted" x="506" y="90">send CSR</text>
+
+  <rect class="box" x="516" y="130" width="216" height="64" rx="5"/>
+  <text x="624" y="154" text-anchor="middle">3. check identity</text>
+  <text class="muted" x="624" y="174" text-anchor="middle">domain / org validation</text>
+
+  <path class="f" d="M624 194 V222" marker-end="url(#m)"/>
+  <rect class="hl" x="516" y="226" width="216" height="100" rx="5"/>
+  <text x="624" y="248" text-anchor="middle">4. certificate</text>
+  <text class="small" x="530" y="270">same public key</text>
+  <text class="small" x="530" y="288">subject + SAN, issuer</text>
+  <text class="muted" x="530" y="308">signed with CA's key</text>
+
+  <path class="w" d="M516 276 H418" marker-end="url(#a)"/>
+
+  <rect class="hl" x="140" y="226" width="274" height="100" rx="5"/>
+  <text x="277" y="248" text-anchor="middle">5. deploy together</text>
+  <text class="small" x="154" y="270">cert + intermediates</text>
+  <text class="small" x="154" y="288">+ private key</text>
+  <text class="muted" x="154" y="308">PEM pair, or bundled in a .pfx</text>
+  <path class="f" d="M113 114 V276 H136" marker-end="url(#m)"/>
+</svg>

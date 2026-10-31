@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 500" role="img" aria-labelledby="t">
+  <title id="t">TLS 1.3 full handshake. The client sends ClientHello with its key share; the server replies with ServerHello and its key share, after which both derive handshake keys; the server then sends EncryptedExtensions, Certificate, CertificateVerify and Finished, encrypted; the client replies with Finished; application data then flows encrypted with symmetric traffic keys</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
+    .muted { fill: #9baeca; font-size: 11.5px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .band { fill: #13233b; stroke: #3a4d6b; stroke-width: 1; stroke-dasharray: 4 3; }
+    .life { fill: none; stroke: #3a4d6b; stroke-width: 1.5; }
+    .p { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+    .e { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+  </style>
+  <defs>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/></marker>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/></marker>
+  </defs>
+  <rect width="760" height="500" fill="#08111f"/>
+
+  <rect class="box" x="60" y="20" width="120" height="36" rx="5"/>
+  <text x="120" y="43" text-anchor="middle">client</text>
+  <rect class="box" x="580" y="20" width="120" height="36" rx="5"/>
+  <text x="640" y="43" text-anchor="middle">server</text>
+  <path class="life" d="M120 56 V456 M640 56 V456"/>
+
+  <text x="150" y="88">ClientHello</text>
+  <text class="muted" x="610" y="88" text-anchor="end">SNI · versions · suites · key_share</text>
+  <path class="p" d="M122 96 H636" marker-end="url(#m)"/>
+
+  <text x="150" y="132">ServerHello</text>
+  <text class="muted" x="610" y="132" text-anchor="end">chosen suite · server key_share</text>
+  <path class="p" d="M638 140 H124" marker-end="url(#m)"/>
+
+  <rect class="band" x="132" y="154" width="496" height="28" rx="4"/>
+  <text class="muted" x="380" y="172" text-anchor="middle">both: ECDHE shared secret → HKDF → handshake keys</text>
+
+  <text x="150" y="208">{EncryptedExtensions}</text>
+  <path class="e" d="M638 216 H124" marker-end="url(#a)"/>
+  <text x="150" y="240">{Certificate}</text>
+  <text class="muted" x="610" y="240" text-anchor="end">leaf + intermediates</text>
+  <path class="e" d="M638 248 H124" marker-end="url(#a)"/>
+  <text x="150" y="272">{CertificateVerify}</text>
+  <text class="muted" x="610" y="272" text-anchor="end">signs transcript with cert's key</text>
+  <path class="e" d="M638 280 H124" marker-end="url(#a)"/>
+  <text x="150" y="304">{Finished}</text>
+  <text class="muted" x="610" y="304" text-anchor="end">MAC over the whole handshake</text>
+  <path class="e" d="M638 312 H124" marker-end="url(#a)"/>
+
+  <rect class="band" x="132" y="326" width="496" height="28" rx="4"/>
+  <text class="muted" x="380" y="344" text-anchor="middle">client validates chain + hostname; both derive traffic keys</text>
+
+  <text x="150" y="380">{Finished}</text>
+  <text class="muted" x="610" y="380" text-anchor="end">client saw the same handshake</text>
+  <path class="e" d="M122 388 H636" marker-end="url(#a)"/>
+
+  <text x="150" y="424">[application data]</text>
+  <text class="muted" x="610" y="424" text-anchor="end">AES-GCM / ChaCha20-Poly1305</text>
+  <path class="e" d="M126 432 H634" marker-start="url(#a)" marker-end="url(#a)"/>
+
+  <text class="muted" x="380" y="484" text-anchor="middle">{ } encrypted with handshake keys · [ ] encrypted with application traffic keys</text>
+</svg>

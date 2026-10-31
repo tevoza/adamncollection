@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" role="img" aria-labelledby="t">
+  <title id="t">Two uses of a key pair. Confidentiality: Alice encrypts with Bob's public key and only Bob's private key decrypts. Authenticity: Alice hashes the message and signs the digest with her private key; Bob re-hashes the message and verifies the signature with Alice's public key</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
+    .small { font-size: 12px; }
+    .muted { fill: #9baeca; font-size: 11.5px; }
+    .pub { fill: #7dd3fc; font-size: 11.5px; }
+    .prv { fill: #c084fc; font-size: 11.5px; }
+    .region { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .kpub { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .kprv { fill: #13233b; stroke: #c084fc; stroke-width: 2; }
+    .f { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+  </style>
+  <defs>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/></marker>
+  </defs>
+  <rect width="760" height="430" fill="#08111f"/>
+
+  <rect class="region" x="12" y="16" width="736" height="150" rx="8"/>
+  <text x="24" y="40">Confidentiality: only Bob can read it</text>
+  <text class="pub" x="736" y="40" text-anchor="end">public key</text>
+  <text class="prv" x="736" y="56" text-anchor="end">private key</text>
+
+  <rect class="box" x="24" y="80" width="90" height="50" rx="5"/>
+  <text x="69" y="110" text-anchor="middle">message</text>
+  <path class="f" d="M114 105 H136" marker-end="url(#m)"/>
+  <rect class="kpub" x="140" y="80" width="150" height="50" rx="5"/>
+  <text x="215" y="101" text-anchor="middle">encrypt</text>
+  <text class="pub" x="215" y="119" text-anchor="middle">Bob's public key</text>
+  <path class="f" d="M290 105 H312" marker-end="url(#m)"/>
+  <rect class="box" x="316" y="80" width="110" height="50" rx="5"/>
+  <text x="371" y="110" text-anchor="middle">ciphertext</text>
+  <path class="f" d="M426 105 H448" marker-end="url(#m)"/>
+  <rect class="kprv" x="452" y="80" width="150" height="50" rx="5"/>
+  <text x="527" y="101" text-anchor="middle">decrypt</text>
+  <text class="prv" x="527" y="119" text-anchor="middle">Bob's private key</text>
+  <path class="f" d="M602 105 H624" marker-end="url(#m)"/>
+  <rect class="box" x="628" y="80" width="108" height="50" rx="5"/>
+  <text x="682" y="110" text-anchor="middle">message</text>
+  <text class="muted" x="24" y="154">Anyone can encrypt for Bob. Only the holder of Bob's private key can decrypt.</text>
+
+  <rect class="region" x="12" y="186" width="736" height="230" rx="8"/>
+  <text x="24" y="210">Authenticity: it came from Alice, unchanged</text>
+
+  <text class="muted" x="24" y="236">Alice</text>
+  <rect class="box" x="24" y="244" width="90" height="50" rx="5"/>
+  <text x="69" y="274" text-anchor="middle">message</text>
+  <path class="f" d="M114 269 H136" marker-end="url(#m)"/>
+  <rect class="box" x="140" y="244" width="110" height="50" rx="5"/>
+  <text x="195" y="274" text-anchor="middle">SHA-256</text>
+  <path class="f" d="M250 269 H272" marker-end="url(#m)"/>
+  <rect class="box" x="276" y="244" width="90" height="50" rx="5"/>
+  <text x="321" y="274" text-anchor="middle">digest</text>
+  <path class="f" d="M366 269 H388" marker-end="url(#m)"/>
+  <rect class="kprv" x="392" y="244" width="150" height="50" rx="5"/>
+  <text x="467" y="265" text-anchor="middle">sign</text>
+  <text class="prv" x="467" y="283" text-anchor="middle">Alice's private key</text>
+  <path class="f" d="M542 269 H564" marker-end="url(#m)"/>
+  <rect class="box" x="568" y="244" width="168" height="50" rx="5"/>
+  <text x="652" y="274" text-anchor="middle">signature</text>
+
+  <text class="muted" x="24" y="336">Bob receives message + signature</text>
+  <path class="f" d="M69 294 V318 M69 344 V370 H564" marker-end="url(#m)"/>
+  <text class="muted" x="300" y="362" text-anchor="middle">re-hash the message</text>
+  <path class="f" d="M652 294 V341" marker-end="url(#m)"/>
+  <rect class="kpub" x="568" y="345" width="168" height="50" rx="5"/>
+  <text x="652" y="366" text-anchor="middle">verify</text>
+  <text class="pub" x="652" y="384" text-anchor="middle">Alice's public key</text>
+  <text class="muted" x="24" y="404">Valid only if Alice's private key signed exactly this message.</text>
+</svg>

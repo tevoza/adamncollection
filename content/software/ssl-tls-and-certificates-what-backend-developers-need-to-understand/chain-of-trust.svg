@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 470" role="img" aria-labelledby="t">
+  <title id="t">A certificate chain. The leaf for api.bank.example is issued and signed by Issuing CA 1; Issuing CA 1's certificate is issued and signed by Demo Root CA; the root is self-signed and already in the client's trust store. The server sends the leaf and intermediate; the client checks each signature with the issuer's public key until it reaches a root it trusts</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
+    .small { font-size: 12px; }
+    .muted { fill: #9baeca; font-size: 11.5px; }
+    .acc { fill: #7dd3fc; font-size: 12px; }
+    .region { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .sig { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/></marker>
+  </defs>
+  <rect width="760" height="470" fill="#08111f"/>
+
+  <rect class="region" x="56" y="16" width="360" height="132" rx="8"/>
+  <text class="muted" x="68" y="34">client's trust store (OS / JVM / image)</text>
+  <rect class="hl" x="76" y="44" width="320" height="94" rx="5"/>
+  <text x="90" y="66">Demo Root CA</text>
+  <text class="small" x="90" y="86">Subject: Demo Root CA</text>
+  <text class="small" x="90" y="104">Issuer:  Demo Root CA  (self-signed)</text>
+  <text class="muted" x="90" y="124">CA:TRUE · private key kept offline</text>
+
+  <rect class="region" x="56" y="168" width="360" height="290" rx="8"/>
+  <text class="muted" x="68" y="186">sent by the server in the handshake</text>
+  <rect class="box" x="76" y="196" width="320" height="110" rx="5"/>
+  <text x="90" y="218">Issuing CA 1  (intermediate)</text>
+  <text class="small" x="90" y="238">Subject: Issuing CA 1</text>
+  <text class="small" x="90" y="256">Issuer:  Demo Root CA</text>
+  <text class="muted" x="90" y="274">CA:TRUE, pathlen:0</text>
+  <text class="muted" x="90" y="292">signed with Root's private key</text>
+
+  <rect class="box" x="76" y="330" width="320" height="116" rx="5"/>
+  <text x="90" y="352">api.bank.example  (leaf)</text>
+  <text class="small" x="90" y="372">SAN:     DNS:api.bank.example</text>
+  <text class="small" x="90" y="390">Issuer:  Issuing CA 1</text>
+  <text class="muted" x="90" y="408">CA:FALSE · EKU serverAuth · 90 days</text>
+  <text class="muted" x="90" y="426">signed with Issuing CA 1's private key</text>
+
+  <path class="sig" d="M76 388 C30 380, 30 270, 72 250" marker-end="url(#a)"/>
+  <path class="sig" d="M76 256 C30 240, 30 120, 72 100" marker-end="url(#a)"/>
+  <text class="acc" x="20" y="320" transform="rotate(-90 20 320)" text-anchor="middle">verified with issuer's key</text>
+
+  <text x="440" y="66">What the client checks</text>
+  <text class="small" x="440" y="96">1. Leaf's signature verifies with</text>
+  <text class="small" x="440" y="114">   Issuing CA 1's public key.</text>
+  <text class="small" x="440" y="142">2. Intermediate's signature verifies</text>
+  <text class="small" x="440" y="160">   with the root's public key.</text>
+  <text class="small" x="440" y="188">3. The root is in the trust store.</text>
+  <text class="small" x="440" y="216">4. Every cert is within its validity</text>
+  <text class="small" x="440" y="234">   dates; CAs have CA:TRUE.</text>
+  <text class="small" x="440" y="262">5. The leaf's SAN matches the host</text>
+  <text class="small" x="440" y="280">   name the client dialled.</text>
+  <text class="small" x="440" y="308">6. Key usage / EKU allow this use.</text>
+  <text class="small" x="440" y="336">7. Optionally: not revoked.</text>
+  <text class="muted" x="440" y="384">Missing intermediate → step 1 has no</text>
+  <text class="muted" x="440" y="402">issuer to check against:</text>
+  <text class="muted" x="440" y="420">"unable to get local issuer certificate"</text>
+</svg>
