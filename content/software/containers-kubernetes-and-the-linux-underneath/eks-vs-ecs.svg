@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" role="img" aria-labelledby="t">
+  <title id="t">Who manages what on EKS and ECS, each on EC2 or Fargate. EKS: AWS runs the Kubernetes control plane; on EC2 you manage worker nodes (AMIs, patching, scaling), on Fargate AWS runs each pod in its own VM. ECS: AWS runs the orchestrator, which has no control plane for you to see; on EC2 you manage container instances, on Fargate AWS runs each task in its own VM. In every case you own the image, its USER and file permissions, the task or pod security settings, and the IAM role</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
+    .small { font-size: 12px; }
+    .muted { fill: #9baeca; font-size: 11.5px; }
+    .acc { fill: #7dd3fc; font-size: 12px; }
+    .aws { fill: #0d1a2c; stroke: #3a4d6b; stroke-width: 1.5; }
+    .you { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+  </style>
+  <rect width="760" height="430" fill="#08111f"/>
+
+  <text x="130" y="30" text-anchor="middle">EKS on EC2</text>
+  <text x="310" y="30" text-anchor="middle">EKS on Fargate</text>
+  <text x="490" y="30" text-anchor="middle">ECS on EC2</text>
+  <text x="670" y="30" text-anchor="middle">ECS on Fargate</text>
+
+  <rect class="you" x="50" y="44" width="160" height="96" rx="5"/>
+  <text class="small" x="62" y="66">image, USER,</text>
+  <text class="small" x="62" y="84">file modes,</text>
+  <text class="small" x="62" y="102">securityContext,</text>
+  <text class="small" x="62" y="120">IAM role</text>
+  <rect class="you" x="230" y="44" width="160" height="96" rx="5"/>
+  <text class="small" x="242" y="66">image, USER,</text>
+  <text class="small" x="242" y="84">file modes,</text>
+  <text class="small" x="242" y="102">securityContext,</text>
+  <text class="small" x="242" y="120">IAM role</text>
+  <rect class="you" x="410" y="44" width="160" height="96" rx="5"/>
+  <text class="small" x="422" y="66">image, USER,</text>
+  <text class="small" x="422" y="84">file modes,</text>
+  <text class="small" x="422" y="102">task definition,</text>
+  <text class="small" x="422" y="120">task role</text>
+  <rect class="you" x="590" y="44" width="160" height="96" rx="5"/>
+  <text class="small" x="602" y="66">image, USER,</text>
+  <text class="small" x="602" y="84">file modes,</text>
+  <text class="small" x="602" y="102">task definition,</text>
+  <text class="small" x="602" y="120">task role</text>
+
+  <rect class="you" x="50" y="150" width="160" height="96" rx="5"/>
+  <text class="small" x="62" y="172">K8s manifests,</text>
+  <text class="small" x="62" y="190">Helm, add-ons,</text>
+  <text class="small" x="62" y="208">cluster upgrades</text>
+  <rect class="you" x="230" y="150" width="160" height="96" rx="5"/>
+  <text class="small" x="242" y="172">K8s manifests,</text>
+  <text class="small" x="242" y="190">Helm, add-ons,</text>
+  <text class="small" x="242" y="208">cluster upgrades,</text>
+  <text class="small" x="242" y="226">Fargate profiles</text>
+  <rect class="you" x="410" y="150" width="160" height="96" rx="5"/>
+  <text class="small" x="422" y="172">services,</text>
+  <text class="small" x="422" y="190">capacity</text>
+  <text class="small" x="422" y="208">providers</text>
+  <rect class="you" x="590" y="150" width="160" height="96" rx="5"/>
+  <text class="small" x="602" y="172">services,</text>
+  <text class="small" x="602" y="190">CPU/memory</text>
+  <text class="small" x="602" y="208">per task</text>
+
+  <rect class="you" x="50" y="256" width="160" height="70" rx="5"/>
+  <text class="small" x="62" y="278">worker nodes:</text>
+  <text class="small" x="62" y="296">AMIs, patching,</text>
+  <text class="small" x="62" y="314">scaling</text>
+  <rect class="aws" x="230" y="256" width="160" height="70" rx="5"/>
+  <text class="small" x="242" y="278">a VM per pod</text>
+  <text class="muted" x="242" y="298">own kernel, no</text>
+  <text class="muted" x="242" y="314">DaemonSets</text>
+  <rect class="you" x="410" y="256" width="160" height="70" rx="5"/>
+  <text class="small" x="422" y="278">container</text>
+  <text class="small" x="422" y="296">instances: AMIs,</text>
+  <text class="small" x="422" y="314">patching, scaling</text>
+  <rect class="aws" x="590" y="256" width="160" height="70" rx="5"/>
+  <text class="small" x="602" y="278">a VM per task</text>
+  <text class="muted" x="602" y="298">awsvpc only</text>
+
+  <rect class="aws" x="50" y="336" width="340" height="44" rx="5"/>
+  <text class="small" x="62" y="363">Kubernetes control plane (API server, etcd)</text>
+  <rect class="aws" x="410" y="336" width="340" height="44" rx="5"/>
+  <text class="small" x="422" y="363">ECS orchestrator (no control plane to see)</text>
+
+  <rect class="you" x="50" y="398" width="18" height="14" rx="3"/>
+  <text class="muted" x="76" y="410">you manage</text>
+  <rect class="aws" x="190" y="398" width="18" height="14" rx="3"/>
+  <text class="muted" x="216" y="410">AWS manages</text>
+</svg>

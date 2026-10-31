@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 380" role="img" aria-labelledby="t">
+  <title id="t">The same numeric UID seen from three places. The container process runs as UID 1654, which the image's /etc/passwd calls "app". A file it writes into a volume is stored on disk with owner 1654. On the host, /etc/passwd has no 1654, so ls shows the number; another image might map 1654 to a different name entirely. Only the number is real</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
+    .small { font-size: 12px; }
+    .muted { fill: #9baeca; font-size: 11.5px; }
+    .acc { fill: #7dd3fc; font-size: 12px; }
+    .region { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .arrow { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/></marker>
+  </defs>
+  <rect width="760" height="380" fill="#08111f"/>
+
+  <rect class="hl" x="270" y="150" width="220" height="80" rx="6"/>
+  <text x="290" y="180">on disk: owner 1654</text>
+  <text class="muted" x="290" y="204">the inode stores a number</text>
+
+  <rect class="region" x="20" y="24" width="230" height="140" rx="8"/>
+  <text class="muted" x="32" y="42">container (payments image)</text>
+  <rect class="box" x="34" y="54" width="202" height="98" rx="5"/>
+  <text class="small" x="46" y="76">process uid=1654</text>
+  <text class="muted" x="46" y="100">image /etc/passwd:</text>
+  <text class="small" x="46" y="118">app:x:1654:1654</text>
+  <text class="acc" x="46" y="140">ls -l → app</text>
+
+  <rect class="region" x="510" y="24" width="230" height="140" rx="8"/>
+  <text class="muted" x="522" y="42">node / host</text>
+  <rect class="box" x="524" y="54" width="202" height="98" rx="5"/>
+  <text class="muted" x="536" y="78">host /etc/passwd:</text>
+  <text class="small" x="536" y="96">no entry for 1654</text>
+  <text class="acc" x="536" y="140">ls -l → 1654</text>
+
+  <rect class="region" x="265" y="250" width="230" height="114" rx="8"/>
+  <text class="muted" x="277" y="268">another image, same volume</text>
+  <rect class="box" x="279" y="278" width="202" height="76" rx="5"/>
+  <text class="muted" x="291" y="300">its /etc/passwd:</text>
+  <text class="small" x="291" y="318">postgres:x:1654:...</text>
+  <text class="acc" x="291" y="342">ls -l → postgres</text>
+
+  <path class="arrow" d="M236 120 C260 130, 262 160, 268 172" marker-end="url(#a)"/>
+  <text class="muted" x="80" y="196">writes a file</text>
+  <path class="arrow" d="M524 120 C500 130, 498 160, 492 172" marker-end="url(#a)"/>
+  <path class="arrow" d="M462 250 L462 234" marker-end="url(#a)"/>
+
+  <text class="small" x="20" y="250">The kernel checks</text>
+  <text class="small" x="20" y="268">numbers. Names are</text>
+  <text class="small" x="20" y="286">lookups in whichever</text>
+  <text class="small" x="20" y="304">/etc/passwd the</text>
+  <text class="small" x="20" y="322">reader sees.</text>
+  <text class="acc" x="530" y="268">debug with:</text>
+  <text class="small" x="530" y="290">ls -ln</text>
+  <text class="small" x="530" y="310">stat -c '%u:%g'</text>
+  <text class="small" x="530" y="330">id</text>
+</svg>

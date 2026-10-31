@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 450" role="img" aria-labelledby="t">
+  <title id="t">How the main Kubernetes objects fit together for one API. Traffic arrives at an Ingress (or Gateway), which routes to a Service. The Service selects pods by label (app: payments-api) and load-balances across their IPs. A Deployment owns a ReplicaSet, which owns three Pods. Each pod mounts a ConfigMap and a Secret as volumes and runs under a ServiceAccount, which is what EKS Pod Identity or IRSA maps to an IAM role</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
+    .small { font-size: 12px; }
+    .muted { fill: #9baeca; font-size: 11.5px; }
+    .acc { fill: #7dd3fc; font-size: 12px; }
+    .region { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .arrow { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .own { fill: none; stroke: #9baeca; stroke-width: 1.5; stroke-dasharray: 4 3; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/></marker>
+    <marker id="o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/></marker>
+  </defs>
+  <rect width="760" height="450" fill="#08111f"/>
+
+  <text class="muted" x="30" y="30">traffic →</text>
+  <rect class="box" x="30" y="44" width="180" height="56" rx="5"/>
+  <text x="44" y="68">Ingress</text>
+  <text class="muted" x="44" y="88">host + path rules</text>
+
+  <rect class="box" x="30" y="150" width="180" height="70" rx="5"/>
+  <text x="44" y="174">Service</text>
+  <text class="muted" x="44" y="194">stable name + IP</text>
+  <text class="acc" x="44" y="212">app=payments-api</text>
+  <path class="arrow" d="M120 100 L120 148" marker-end="url(#a)"/>
+
+  <rect class="region" x="260" y="130" width="300" height="300" rx="8"/>
+  <text class="muted" x="272" y="148">pods (label app=payments-api)</text>
+
+  <rect class="hl" x="276" y="160" width="268" height="72" rx="5"/>
+  <text class="small" x="290" y="182">Pod 1 · 10.0.3.17</text>
+  <text class="muted" x="290" y="202">container api, uid 1654</text>
+  <text class="muted" x="290" y="220">ServiceAccount payments-api</text>
+  <rect class="hl" x="276" y="244" width="268" height="72" rx="5"/>
+  <text class="small" x="290" y="266">Pod 2 · 10.0.4.52</text>
+  <text class="muted" x="290" y="286">container api, uid 1654</text>
+  <text class="muted" x="290" y="304">ServiceAccount payments-api</text>
+  <rect class="hl" x="276" y="328" width="268" height="72" rx="5"/>
+  <text class="small" x="290" y="350">Pod 3 · 10.0.5.9</text>
+  <text class="muted" x="290" y="370">container api, uid 1654</text>
+  <text class="muted" x="290" y="388">ServiceAccount payments-api</text>
+
+  <path class="arrow" d="M210 185 L274 196" marker-end="url(#a)"/>
+  <path class="arrow" d="M210 192 L274 280" marker-end="url(#a)"/>
+  <path class="arrow" d="M210 200 L274 362" marker-end="url(#a)"/>
+
+  <rect class="box" x="30" y="270" width="180" height="56" rx="5"/>
+  <text x="44" y="294">Deployment</text>
+  <text class="muted" x="44" y="314">template + replicas: 3</text>
+  <rect class="box" x="30" y="360" width="180" height="56" rx="5"/>
+  <text x="44" y="384">ReplicaSet</text>
+  <text class="muted" x="44" y="404">one per template version</text>
+  <path class="own" d="M120 326 L120 358" marker-end="url(#o)"/>
+  <path class="own" d="M210 388 L258 388" marker-end="url(#o)"/>
+  <text class="muted" x="216" y="378">owns</text>
+
+  <rect class="box" x="590" y="160" width="150" height="56" rx="5"/>
+  <text x="604" y="184">ConfigMap</text>
+  <text class="muted" x="604" y="204">settings</text>
+  <rect class="box" x="590" y="236" width="150" height="56" rx="5"/>
+  <text x="604" y="260">Secret</text>
+  <text class="muted" x="604" y="280">bank client key</text>
+  <rect class="box" x="590" y="312" width="150" height="72" rx="5"/>
+  <text x="604" y="336">ServiceAccount</text>
+  <text class="muted" x="604" y="356">→ IAM role via</text>
+  <text class="muted" x="604" y="374">Pod Identity/IRSA</text>
+  <path class="own" d="M588 188 L546 196" marker-end="url(#o)"/>
+  <path class="own" d="M588 264 L546 270" marker-end="url(#o)"/>
+  <text class="muted" x="590" y="146">mounted as volumes</text>
+
+  <text class="small" x="590" y="414">controllers keep</text>
+  <text class="small" x="590" y="432">actual = declared</text>
+</svg>

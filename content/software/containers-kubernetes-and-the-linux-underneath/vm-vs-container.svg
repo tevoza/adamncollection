@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420" role="img" aria-labelledby="t">
+  <title id="t">A virtual machine stack compared with a container stack. On the left, a hypervisor runs two VMs, each with its own guest kernel, OS libraries and app. On the right, one Linux kernel runs two containers directly; each is a process tree with its own namespaces, cgroup limits and image filesystem, sharing the host kernel</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
+    .small { font-size: 12px; }
+    .muted { fill: #9baeca; font-size: 11.5px; }
+    .acc { fill: #7dd3fc; font-size: 12px; }
+    .region { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+  </style>
+  <rect width="760" height="420" fill="#08111f"/>
+
+  <text x="40" y="34">Virtual machines</text>
+  <text class="muted" x="40" y="52">each VM boots its own kernel</text>
+
+  <rect class="region" x="40" y="66" width="150" height="214" rx="8"/>
+  <rect class="box" x="54" y="80" width="122" height="44" rx="5"/>
+  <text class="small" x="66" y="107">payments-api</text>
+  <rect class="box" x="54" y="134" width="122" height="44" rx="5"/>
+  <text class="small" x="66" y="161">libs + OS</text>
+  <rect class="hl" x="54" y="188" width="122" height="44" rx="5"/>
+  <text class="small" x="66" y="215">guest kernel</text>
+  <text class="muted" x="54" y="262">VM 1</text>
+
+  <rect class="region" x="206" y="66" width="150" height="214" rx="8"/>
+  <rect class="box" x="220" y="80" width="122" height="44" rx="5"/>
+  <text class="small" x="232" y="107">orders-api</text>
+  <rect class="box" x="220" y="134" width="122" height="44" rx="5"/>
+  <text class="small" x="232" y="161">libs + OS</text>
+  <rect class="hl" x="220" y="188" width="122" height="44" rx="5"/>
+  <text class="small" x="232" y="215">guest kernel</text>
+  <text class="muted" x="220" y="262">VM 2</text>
+
+  <rect class="box" x="40" y="296" width="316" height="40" rx="5"/>
+  <text class="small" x="54" y="321">hypervisor</text>
+  <rect class="box" x="40" y="346" width="316" height="40" rx="5"/>
+  <text class="small" x="54" y="371">hardware</text>
+
+  <line x1="380" y1="30" x2="380" y2="396" stroke="#3a4d6b" stroke-width="1"/>
+
+  <text x="404" y="34">Containers</text>
+  <text class="muted" x="404" y="52">processes on one shared kernel</text>
+
+  <rect class="region" x="404" y="66" width="150" height="214" rx="8"/>
+  <rect class="box" x="418" y="80" width="122" height="44" rx="5"/>
+  <text class="small" x="430" y="107">payments-api</text>
+  <rect class="box" x="418" y="134" width="122" height="44" rx="5"/>
+  <text class="small" x="430" y="153">image</text>
+  <text class="small" x="430" y="169">filesystem</text>
+  <text class="acc" x="418" y="202">namespaces:</text>
+  <text class="muted" x="418" y="220">pid mnt net uts ipc</text>
+  <text class="acc" x="418" y="244">cgroup:</text>
+  <text class="muted" x="418" y="262">cpu, memory limits</text>
+
+  <rect class="region" x="570" y="66" width="150" height="214" rx="8"/>
+  <rect class="box" x="584" y="80" width="122" height="44" rx="5"/>
+  <text class="small" x="596" y="107">orders-api</text>
+  <rect class="box" x="584" y="134" width="122" height="44" rx="5"/>
+  <text class="small" x="596" y="153">image</text>
+  <text class="small" x="596" y="169">filesystem</text>
+  <text class="acc" x="584" y="202">namespaces:</text>
+  <text class="muted" x="584" y="220">pid mnt net uts ipc</text>
+  <text class="acc" x="584" y="244">cgroup:</text>
+  <text class="muted" x="584" y="262">cpu, memory limits</text>
+
+  <rect class="hl" x="404" y="296" width="316" height="40" rx="5"/>
+  <text class="small" x="418" y="321">one Linux kernel (shared)</text>
+  <rect class="box" x="404" y="346" width="316" height="40" rx="5"/>
+  <text class="small" x="418" y="371">hardware (or a VM)</text>
+  <text class="muted" x="404" y="410">UID 0 in a container is UID 0 to this kernel</text>
+</svg>
