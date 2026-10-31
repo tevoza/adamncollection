@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 270" role="img" aria-labelledby="t">
+  <title id="t">A ChargeAsync call passes from the caller into InstrumentedProvider, which logs and starts a timer, then into CardProvider, then to the card API. The result returns back through each layer, and InstrumentedProvider records the duration on the way out. Both providers implement IPaymentProvider</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+  </defs>
+  <rect width="760" height="270" fill="#08111f"/>
+
+  <path class="dir" d="M200 62 V52 H570 V62"/>
+  <text class="muted" x="385" y="42" text-anchor="middle">both implement IPaymentProvider</text>
+
+  <rect class="box" x="20" y="80" width="130" height="100" rx="6"/>
+  <text x="85" y="126" text-anchor="middle">caller</text>
+  <text class="muted" x="85" y="146" text-anchor="middle">For(Card)</text>
+  <rect class="hl" x="200" y="80" width="170" height="100" rx="6"/>
+  <text x="285" y="126" text-anchor="middle">Instrumented</text>
+  <text x="285" y="146" text-anchor="middle">Provider</text>
+  <rect class="hl" x="420" y="80" width="150" height="100" rx="6"/>
+  <text x="495" y="136" text-anchor="middle">CardProvider</text>
+  <rect class="box" x="620" y="80" width="120" height="100" rx="6"/>
+  <text x="680" y="126" text-anchor="middle">card API</text>
+  <text class="muted" x="680" y="146" text-anchor="middle">HTTP</text>
+
+  <path class="ptr" d="M150 104 H196" marker-end="url(#a)"/>
+  <path class="ptr" d="M370 104 H416" marker-end="url(#a)"/>
+  <path class="ptr" d="M570 104 H616" marker-end="url(#a)"/>
+  <path class="dir" d="M616 160 H574" marker-end="url(#m)"/>
+  <path class="dir" d="M416 160 H374" marker-end="url(#m)"/>
+  <path class="dir" d="M196 160 H154" marker-end="url(#m)"/>
+
+  <text class="muted" x="285" y="208" text-anchor="middle">in: log, start timer</text>
+  <text class="muted" x="285" y="226" text-anchor="middle">out: record duration</text>
+  <text class="muted" x="495" y="208" text-anchor="middle">card logic only</text>
+  <text class="muted" x="380" y="258" text-anchor="middle">ChargeAsync goes right along the top; ChargeResult comes back underneath.</text>
+</svg>

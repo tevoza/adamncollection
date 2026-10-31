@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 330" role="img" aria-labelledby="t">
+  <title id="t">The Payment aggregate: a dashed boundary containing the Payment root and its Refunds. RefundPaymentHandler calls the root. The old BatchRefundJob path writing a Refund directly is crossed out. The Ledger is a separate aggregate, reached by a PaymentCompleted event through the outbox</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .sm { font-size: 12px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .bad { fill: #fca5a5; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .badbox { fill: #2a1620; stroke: #f87171; stroke-width: 1.5; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+    .badptr { fill: none; stroke: #f87171; stroke-width: 1.75; stroke-dasharray: 5 4; }
+    .dash { fill: none; stroke: #7dd3fc; stroke-width: 1.5; stroke-dasharray: 6 4; }
+    .dash2 { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f87171"/>
+    </marker>
+  </defs>
+  <rect width="760" height="330" fill="#08111f"/>
+
+  <rect class="dash" x="260" y="44" width="300" height="226" rx="8"/>
+  <text class="muted" x="272" y="66">Payment aggregate</text>
+
+  <rect class="hl" x="300" y="82" width="220" height="56" rx="6"/>
+  <text x="410" y="106" text-anchor="middle">Payment (root)</text>
+  <text class="muted" x="410" y="126" text-anchor="middle">Status · Amount · Version</text>
+
+  <rect class="box" x="290" y="196" width="110" height="44" rx="6"/>
+  <text class="sm" x="345" y="223" text-anchor="middle">Refund</text>
+  <rect class="box" x="420" y="196" width="110" height="44" rx="6"/>
+  <text class="sm" x="475" y="223" text-anchor="middle">Refund</text>
+  <path class="dir" d="M380 138 L352 192" marker-end="url(#m)"/>
+  <path class="dir" d="M440 138 L468 192" marker-end="url(#m)"/>
+
+  <rect class="box" x="30" y="85" width="170" height="50" rx="6"/>
+  <text class="sm" x="115" y="106" text-anchor="middle">RefundPayment</text>
+  <text class="sm" x="115" y="122" text-anchor="middle">Handler</text>
+  <path class="ptr" d="M200 110 H296" marker-end="url(#a)"/>
+  <text class="muted" x="248" y="100" text-anchor="middle">Refund()</text>
+
+  <rect class="badbox" x="30" y="196" width="170" height="44" rx="6"/>
+  <text class="sm" x="115" y="223" text-anchor="middle">BatchRefundJob</text>
+  <path class="badptr" d="M200 218 H286" marker-end="url(#r)"/>
+  <path d="M236 208 L252 228 M252 208 L236 228" stroke="#f87171" stroke-width="2"/>
+  <text class="bad" x="115" y="260" text-anchor="middle">db.Refunds.Add</text>
+  <text class="bad" x="115" y="276" text-anchor="middle">no longer possible</text>
+
+  <rect class="dash2" x="610" y="85" width="130" height="56" rx="6"/>
+  <text x="675" y="110" text-anchor="middle">Ledger</text>
+  <text class="muted" x="675" y="128" text-anchor="middle">own aggregate</text>
+  <path class="dir" d="M560 113 H606" stroke-dasharray="5 4" marker-end="url(#m)"/>
+  <text class="muted" x="675" y="164" text-anchor="middle">PaymentCompleted</text>
+  <text class="muted" x="675" y="180" text-anchor="middle">via outbox</text>
+
+  <text class="muted" x="380" y="312" text-anchor="middle">Outside code reaches refunds only through the root. Transactions stop at the boundary.</text>
+</svg>

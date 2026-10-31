@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 490" role="img" aria-labelledby="t">
+  <title id="t">Concentric rings. Domain at the centre holds Payment, Money and domain events. Application around it holds use cases and the ports they own, IPaymentRepository and IPaymentNotifier. The outer ring is split between Infrastructure, with EF Core and adapters, and Presentation, with the API and webhooks. Arrows point inward only. Program.cs, the composition root, sits outside and references every layer</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; stroke-dasharray: 5 4; }
+    .dash { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+  </defs>
+  <rect width="760" height="490" fill="#08111f"/>
+
+  <circle cx="300" cy="230" r="220" fill="#0d1829" stroke="#3a4d6b" stroke-width="1.5"/>
+  <circle cx="300" cy="230" r="140" fill="#13233b" stroke="#3a4d6b" stroke-width="1.5"/>
+  <circle cx="300" cy="230" r="72" fill="#13233b" stroke="#7dd3fc" stroke-width="2"/>
+
+  <path class="dash" d="M300 10 V90 M300 370 V450"/>
+  <text x="292" y="62" text-anchor="end" font-size="13">Infrastructure</text>
+  <text class="muted" x="292" y="80" text-anchor="end">EF Core, adapters</text>
+  <text x="308" y="62" font-size="13">Presentation</text>
+  <text class="muted" x="308" y="80">API, webhooks</text>
+
+  <text x="300" y="118" text-anchor="middle">Application</text>
+  <text class="muted" x="300" y="138" text-anchor="middle">use cases + ports</text>
+  <text class="muted" x="300" y="330" text-anchor="middle">IPaymentRepository</text>
+  <text class="muted" x="300" y="348" text-anchor="middle">IPaymentNotifier</text>
+
+  <text x="300" y="224" text-anchor="middle">Domain</text>
+  <text class="muted" x="300" y="244" text-anchor="middle">Payment · Money</text>
+  <text class="muted" x="300" y="260" text-anchor="middle">domain events</text>
+
+  <path class="ptr" d="M148 382 L198 332" marker-end="url(#a)"/>
+  <path class="ptr" d="M452 382 L402 332" marker-end="url(#a)"/>
+  <path class="ptr" d="M164 230 H224" marker-end="url(#a)"/>
+  <path class="ptr" d="M436 230 H376" marker-end="url(#a)"/>
+
+  <rect class="box" x="560" y="190" width="180" height="84" rx="6"/>
+  <text x="650" y="216" text-anchor="middle">Program.cs</text>
+  <text class="muted" x="650" y="238" text-anchor="middle">composition root</text>
+  <text class="muted" x="650" y="256" text-anchor="middle">wires ports to adapters</text>
+  <path class="dir" d="M560 232 H524" marker-end="url(#m)"/>
+
+  <text class="muted" x="380" y="478" text-anchor="middle">Source dependencies point inward. Nothing in an inner ring names anything outside it.</text>
+</svg>

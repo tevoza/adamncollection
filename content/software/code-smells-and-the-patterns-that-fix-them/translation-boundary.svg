@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 440" role="img" aria-labelledby="t">
+  <title id="t">Three providers send payloads in their own formats. Each passes through one translator at the boundary and comes out as a PaymentEvent, the only type the webhook endpoint, reconciliation job and support tool consume</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .sm { font-size: 12px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+    .dash { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+  </defs>
+  <rect width="820" height="440" fill="#08111f"/>
+
+  <text x="135" y="32" text-anchor="middle">their vocabulary</text>
+  <text x="370" y="32" text-anchor="middle">translate once</text>
+  <text x="650" y="32" text-anchor="middle">our vocabulary</text>
+
+  <rect class="box" x="20" y="50" width="230" height="96" rx="6"/>
+  <text class="sm" x="34" y="72">card webhook</text>
+  <text class="muted" x="34" y="94">type: "charge.succeeded"</text>
+  <text class="muted" x="34" y="112">amount: 1999  (minor units)</text>
+  <text class="muted" x="34" y="130">currency: "eur"</text>
+
+  <rect class="box" x="20" y="162" width="230" height="96" rx="6"/>
+  <text class="sm" x="34" y="184">bank status report</text>
+  <text class="muted" x="34" y="206">TxSts: "ACSC"</text>
+  <text class="muted" x="34" y="224">InstdAmt: "19.99"</text>
+  <text class="muted" x="34" y="242">Ccy: "EUR"</text>
+
+  <rect class="box" x="20" y="274" width="230" height="96" rx="6"/>
+  <text class="sm" x="34" y="296">wallet event</text>
+  <text class="muted" x="34" y="318">state: "PAID"</text>
+  <text class="muted" x="34" y="336">amount_cents: 1999</text>
+  <text class="muted" x="34" y="354">cur: "EUR"</text>
+
+  <rect class="dash" x="285" y="44" width="170" height="332" rx="8"/>
+  <rect class="hl" x="300" y="74" width="140" height="48" rx="6"/>
+  <text class="sm" x="370" y="94" text-anchor="middle">CardEvent</text>
+  <text class="sm" x="370" y="110" text-anchor="middle">Translator</text>
+  <rect class="hl" x="300" y="186" width="140" height="48" rx="6"/>
+  <text class="sm" x="370" y="206" text-anchor="middle">BankEvent</text>
+  <text class="sm" x="370" y="222" text-anchor="middle">Translator</text>
+  <rect class="hl" x="300" y="298" width="140" height="48" rx="6"/>
+  <text class="sm" x="370" y="318" text-anchor="middle">WalletEvent</text>
+  <text class="sm" x="370" y="334" text-anchor="middle">Translator</text>
+
+  <path class="dir" d="M250 98 H296" marker-end="url(#m)"/>
+  <path class="dir" d="M250 210 H296" marker-end="url(#m)"/>
+  <path class="dir" d="M250 322 H296" marker-end="url(#m)"/>
+
+  <rect class="hl" x="490" y="140" width="140" height="140" rx="6"/>
+  <text x="560" y="164" text-anchor="middle">PaymentEvent</text>
+  <text class="muted" x="560" y="190" text-anchor="middle">PaymentId</text>
+  <text class="muted" x="560" y="208" text-anchor="middle">Kind</text>
+  <text class="muted" x="560" y="226" text-anchor="middle">Amount</text>
+  <text class="muted" x="560" y="244" text-anchor="middle">Currency</text>
+  <text class="muted" x="560" y="262" text-anchor="middle">OccurredAt</text>
+
+  <path class="ptr" d="M440 98 C470 98, 460 180, 486 180" marker-end="url(#a)"/>
+  <path class="ptr" d="M440 210 H486" marker-end="url(#a)"/>
+  <path class="ptr" d="M440 322 C470 322, 460 240, 486 240" marker-end="url(#a)"/>
+
+  <rect class="box" x="670" y="120" width="130" height="44" rx="6"/>
+  <text class="sm" x="735" y="147" text-anchor="middle">Webhooks</text>
+  <rect class="box" x="670" y="188" width="130" height="44" rx="6"/>
+  <text class="sm" x="735" y="215" text-anchor="middle">Reconciliation</text>
+  <rect class="box" x="670" y="256" width="130" height="44" rx="6"/>
+  <text class="sm" x="735" y="283" text-anchor="middle">Support tool</text>
+  <path class="ptr" d="M630 180 L666 146" marker-end="url(#a)"/>
+  <path class="ptr" d="M630 210 H666" marker-end="url(#a)"/>
+  <path class="ptr" d="M630 240 L666 274" marker-end="url(#a)"/>
+
+  <text class="muted" x="410" y="408" text-anchor="middle">Minor units, status codes and currency spelling stop at the boundary.</text>
+  <text class="muted" x="410" y="426" text-anchor="middle">Fix the yen bug once, in one place.</text>
+</svg>

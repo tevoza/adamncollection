@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" role="img" aria-labelledby="t">
+  <title id="t">Payment lifecycle as a state diagram. Pending can move to Authorised, Completed, Failed, Cancelled or Expired. Authorised can move to Completed, Cancelled or Expired. Completed can move to PartiallyRefunded or Refunded. PartiallyRefunded can move to itself or to Refunded. A late completed webhook trying to move Refunded back to Completed is rejected</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .sm { font-size: 12px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .bad { fill: #fca5a5; font-size: 12px; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .term { fill: #0d1829; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 4 3; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+    .badptr { fill: none; stroke: #f87171; stroke-width: 1.75; stroke-dasharray: 5 4; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f87171"/>
+    </marker>
+  </defs>
+  <rect width="800" height="420" fill="#08111f"/>
+
+  <rect class="hl" x="30" y="180" width="120" height="40" rx="6"/>
+  <text x="90" y="205" text-anchor="middle">Pending</text>
+  <rect class="hl" x="200" y="180" width="130" height="40" rx="6"/>
+  <text x="265" y="205" text-anchor="middle">Authorised</text>
+  <rect class="hl" x="390" y="180" width="120" height="40" rx="6"/>
+  <text x="450" y="205" text-anchor="middle">Completed</text>
+  <rect class="hl" x="570" y="100" width="190" height="40" rx="6"/>
+  <text x="665" y="125" text-anchor="middle">PartiallyRefunded</text>
+  <rect class="term" x="590" y="260" width="150" height="40" rx="6"/>
+  <text x="665" y="285" text-anchor="middle">Refunded</text>
+
+  <rect class="term" x="10" y="330" width="85" height="36" rx="6"/>
+  <text class="sm" x="52" y="352" text-anchor="middle">Failed</text>
+  <rect class="term" x="105" y="330" width="90" height="36" rx="6"/>
+  <text class="sm" x="150" y="352" text-anchor="middle">Expired</text>
+  <rect class="term" x="215" y="330" width="110" height="36" rx="6"/>
+  <text class="sm" x="270" y="352" text-anchor="middle">Cancelled</text>
+
+  <path class="ptr" d="M150 200 H196" marker-end="url(#a)"/>
+  <path class="ptr" d="M330 200 H386" marker-end="url(#a)"/>
+  <path class="ptr" d="M90 180 C90 115, 450 115, 450 176" marker-end="url(#a)"/>
+  <text class="muted" x="270" y="116" text-anchor="middle">captured in one step</text>
+
+  <path class="dir" d="M70 220 L55 326" marker-end="url(#m)"/>
+  <path class="dir" d="M100 220 L145 326" marker-end="url(#m)"/>
+  <path class="dir" d="M135 220 C180 260, 240 280, 255 326" marker-end="url(#m)"/>
+  <path class="dir" d="M280 220 L282 326" marker-end="url(#m)"/>
+  <path class="dir" d="M235 220 L178 326" marker-end="url(#m)"/>
+
+  <path class="ptr" d="M510 192 L566 130" marker-end="url(#a)"/>
+  <path class="ptr" d="M510 210 L586 276" marker-end="url(#a)"/>
+  <path class="ptr" d="M665 140 V256" marker-end="url(#a)"/>
+  <path class="ptr" d="M760 112 C796 96, 796 146, 764 130" marker-end="url(#a)"/>
+
+  <path class="badptr" d="M590 292 C520 300, 455 280, 452 226" marker-end="url(#r)"/>
+  <text class="bad" x="560" y="332" text-anchor="middle">late "completed" webhook: rejected</text>
+
+  <text class="muted" x="400" y="404" text-anchor="middle">Every solid arrow is an entry in the transition table. Anything else throws.</text>
+</svg>
