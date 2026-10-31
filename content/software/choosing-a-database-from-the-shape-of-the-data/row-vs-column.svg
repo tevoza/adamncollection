@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" role="img" aria-labelledby="t">
+  <title id="t">The same events table stored by row and by column: a query on date and country reads every row page in a row store, but only two of five column files in a column store</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 12.5px; }
+    .h { font-size: 15px; }
+    .muted { fill: #9baeca; font-size: 11.5px; }
+    .page { fill: none; stroke: #c084fc; stroke-width: 1.75; stroke-dasharray: 6 3; }
+    .cell { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.25; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .col { fill: none; stroke: #3a4d6b; stroke-width: 1.5; }
+    .colhl { fill: none; stroke: #7dd3fc; stroke-width: 2; }
+    .dim { opacity: 0.4; }
+  </style>
+  <rect width="720" height="340" fill="#08111f"/>
+
+  <!-- Row store -->
+  <text class="h" x="180" y="24" text-anchor="middle">Row store</text>
+  <g class="muted">
+    <text x="60" y="44" text-anchor="middle" class="muted">date</text>
+    <text x="120" y="44" text-anchor="middle" class="muted">country</text>
+    <text x="180" y="44" text-anchor="middle" class="muted">user</text>
+    <text x="240" y="44" text-anchor="middle" class="muted">event</text>
+    <text x="300" y="44" text-anchor="middle" class="muted">props</text>
+  </g>
+
+  <rect class="page" x="22" y="50" width="316" height="92" rx="6"/>
+  <rect class="hl" x="32" y="58" width="56" height="26" rx="3"/><text x="60" y="76" text-anchor="middle">10-01</text>
+  <rect class="hl" x="92" y="58" width="56" height="26" rx="3"/><text x="120" y="76" text-anchor="middle">ZA</text>
+  <rect class="cell" x="152" y="58" width="56" height="26" rx="3"/><text x="180" y="76" text-anchor="middle">42</text>
+  <rect class="cell" x="212" y="58" width="56" height="26" rx="3"/><text x="240" y="76" text-anchor="middle">view</text>
+  <rect class="cell" x="272" y="58" width="56" height="26" rx="3"/><text x="300" y="76" text-anchor="middle">{…}</text>
+  <rect class="hl" x="32" y="92" width="56" height="26" rx="3"/><text x="60" y="110" text-anchor="middle">10-01</text>
+  <rect class="hl" x="92" y="92" width="56" height="26" rx="3"/><text x="120" y="110" text-anchor="middle">GB</text>
+  <rect class="cell" x="152" y="92" width="56" height="26" rx="3"/><text x="180" y="110" text-anchor="middle">77</text>
+  <rect class="cell" x="212" y="92" width="56" height="26" rx="3"/><text x="240" y="110" text-anchor="middle">click</text>
+  <rect class="cell" x="272" y="92" width="56" height="26" rx="3"/><text x="300" y="110" text-anchor="middle">{…}</text>
+  <text class="muted" x="328" y="135" text-anchor="end">page 1</text>
+
+  <rect class="page" x="22" y="152" width="316" height="92" rx="6"/>
+  <rect class="hl" x="32" y="160" width="56" height="26" rx="3"/><text x="60" y="178" text-anchor="middle">10-02</text>
+  <rect class="hl" x="92" y="160" width="56" height="26" rx="3"/><text x="120" y="178" text-anchor="middle">ZA</text>
+  <rect class="cell" x="152" y="160" width="56" height="26" rx="3"/><text x="180" y="178" text-anchor="middle">42</text>
+  <rect class="cell" x="212" y="160" width="56" height="26" rx="3"/><text x="240" y="178" text-anchor="middle">view</text>
+  <rect class="cell" x="272" y="160" width="56" height="26" rx="3"/><text x="300" y="178" text-anchor="middle">{…}</text>
+  <rect class="hl" x="32" y="194" width="56" height="26" rx="3"/><text x="60" y="212" text-anchor="middle">10-02</text>
+  <rect class="hl" x="92" y="194" width="56" height="26" rx="3"/><text x="120" y="212" text-anchor="middle">ZA</text>
+  <rect class="cell" x="152" y="194" width="56" height="26" rx="3"/><text x="180" y="212" text-anchor="middle">91</text>
+  <rect class="cell" x="212" y="194" width="56" height="26" rx="3"/><text x="240" y="212" text-anchor="middle">buy</text>
+  <rect class="cell" x="272" y="194" width="56" height="26" rx="3"/><text x="300" y="212" text-anchor="middle">{…}</text>
+  <text class="muted" x="328" y="237" text-anchor="end">page 2</text>
+
+  <text class="muted" x="180" y="266" text-anchor="middle">Needs 2 columns, but every page is read</text>
+  <text class="muted" x="180" y="282" text-anchor="middle">in full: all 5 columns of every row.</text>
+
+  <!-- Column store -->
+  <text class="h" x="540" y="24" text-anchor="middle">Column store</text>
+
+  <rect class="colhl" x="384" y="50" width="56" height="194" rx="6"/>
+  <rect class="hl" x="390" y="60" width="44" height="36" rx="3"/><text x="412" y="83" text-anchor="middle" style="font-size:11px">10-01</text>
+  <rect class="hl" x="390" y="104" width="44" height="36" rx="3"/><text x="412" y="127" text-anchor="middle" style="font-size:11px">10-01</text>
+  <rect class="hl" x="390" y="148" width="44" height="36" rx="3"/><text x="412" y="171" text-anchor="middle" style="font-size:11px">10-02</text>
+  <rect class="hl" x="390" y="192" width="44" height="36" rx="3"/><text x="412" y="215" text-anchor="middle" style="font-size:11px">10-02</text>
+
+  <rect class="colhl" x="448" y="50" width="56" height="194" rx="6"/>
+  <rect class="hl" x="454" y="60" width="44" height="36" rx="3"/><text x="476" y="83" text-anchor="middle">ZA</text>
+  <rect class="hl" x="454" y="104" width="44" height="36" rx="3"/><text x="476" y="127" text-anchor="middle">GB</text>
+  <rect class="hl" x="454" y="148" width="44" height="36" rx="3"/><text x="476" y="171" text-anchor="middle">ZA</text>
+  <rect class="hl" x="454" y="192" width="44" height="36" rx="3"/><text x="476" y="215" text-anchor="middle">ZA</text>
+
+  <g class="dim">
+    <rect class="col" x="512" y="50" width="56" height="194" rx="6"/>
+    <rect class="cell" x="518" y="60" width="44" height="36" rx="3"/><text x="540" y="83" text-anchor="middle">42</text>
+    <rect class="cell" x="518" y="104" width="44" height="36" rx="3"/><text x="540" y="127" text-anchor="middle">77</text>
+    <rect class="cell" x="518" y="148" width="44" height="36" rx="3"/><text x="540" y="171" text-anchor="middle">42</text>
+    <rect class="cell" x="518" y="192" width="44" height="36" rx="3"/><text x="540" y="215" text-anchor="middle">91</text>
+
+    <rect class="col" x="576" y="50" width="56" height="194" rx="6"/>
+    <rect class="cell" x="582" y="60" width="44" height="36" rx="3"/><text x="604" y="83" text-anchor="middle" style="font-size:11px">view</text>
+    <rect class="cell" x="582" y="104" width="44" height="36" rx="3"/><text x="604" y="127" text-anchor="middle" style="font-size:11px">click</text>
+    <rect class="cell" x="582" y="148" width="44" height="36" rx="3"/><text x="604" y="171" text-anchor="middle" style="font-size:11px">view</text>
+    <rect class="cell" x="582" y="192" width="44" height="36" rx="3"/><text x="604" y="215" text-anchor="middle" style="font-size:11px">buy</text>
+
+    <rect class="col" x="640" y="50" width="56" height="194" rx="6"/>
+    <rect class="cell" x="646" y="60" width="44" height="36" rx="3"/><text x="668" y="83" text-anchor="middle">{…}</text>
+    <rect class="cell" x="646" y="104" width="44" height="36" rx="3"/><text x="668" y="127" text-anchor="middle">{…}</text>
+    <rect class="cell" x="646" y="148" width="44" height="36" rx="3"/><text x="668" y="171" text-anchor="middle">{…}</text>
+    <rect class="cell" x="646" y="192" width="44" height="36" rx="3"/><text x="668" y="215" text-anchor="middle">{…}</text>
+  </g>
+
+  <text class="muted" x="412" y="262" text-anchor="middle">date</text>
+  <text class="muted" x="476" y="262" text-anchor="middle">country</text>
+  <text class="muted" x="540" y="262" text-anchor="middle">user</text>
+  <text class="muted" x="604" y="262" text-anchor="middle">event</text>
+  <text class="muted" x="668" y="262" text-anchor="middle">props</text>
+
+  <text class="muted" x="540" y="282" text-anchor="middle">Reads 2 of 5 column files. Similar values</text>
+  <text class="muted" x="540" y="298" text-anchor="middle">sit together, so they compress well.</text>
+
+  <text x="360" y="328" text-anchor="middle" style="fill:#7dd3fc">SELECT country, count(*) … WHERE date &gt;= '10-01' GROUP BY country</text>
+</svg>

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 320" role="img" aria-labelledby="t">
+  <title id="t">DynamoDB: the partition key is hashed to choose a partition; items with the same partition key form an item collection sorted by sort key, so a Query reads one contiguous range</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13px; }
+    .muted { fill: #9baeca; font-size: 11.5px; }
+    .frame { fill: none; stroke: #3a4d6b; stroke-width: 1.5; }
+    .framehl { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .edge { fill: none; stroke: #3a4d6b; stroke-width: 1.5; }
+    .w { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .q { fill: none; stroke: #c084fc; stroke-width: 2; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/></marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3a4d6b"/></marker>
+  </defs>
+  <rect width="720" height="320" fill="#08111f"/>
+
+  <text class="muted" x="95" y="80" text-anchor="middle">partition key</text>
+  <text x="95" y="100" text-anchor="middle">CUSTOMER#42</text>
+  <path class="w" d="M95 108 V136" marker-end="url(#a)"/>
+  <rect class="hl" x="20" y="140" width="150" height="50" rx="5"/>
+  <text x="95" y="170" text-anchor="middle">hash(PK)</text>
+
+  <rect class="frame" x="230" y="20" width="210" height="44" rx="5"/>
+  <text class="muted" x="335" y="47" text-anchor="middle">partition 1 · other keys</text>
+  <rect class="frame" x="460" y="20" width="240" height="44" rx="5"/>
+  <text class="muted" x="580" y="47" text-anchor="middle">partition 3 · CUSTOMER#77, …</text>
+
+  <path class="edge" d="M170 152 C200 120, 220 60, 228 48" marker-end="url(#m)"/>
+  <path class="edge" d="M170 146 C250 100, 420 90, 520 66" marker-end="url(#m)"/>
+  <path class="w" d="M170 168 H226" marker-end="url(#a)"/>
+
+  <rect class="framehl" x="230" y="84" width="470" height="186" rx="6"/>
+  <text x="246" y="106">partition 2</text>
+  <text class="muted" x="246" y="126">item collection PK = CUSTOMER#42, sorted by sort key</text>
+
+  <rect class="box" x="246" y="138" width="438" height="32" rx="4"/>
+  <text x="258" y="159">SK = PROFILE</text>
+  <text class="muted" x="672" y="159" text-anchor="end">name, email, …</text>
+  <rect class="hl" x="246" y="178" width="438" height="32" rx="4"/>
+  <text x="258" y="199">SK = ORDER#2026-10-03#9f1c</text>
+  <text class="muted" x="672" y="199" text-anchor="end">total, status</text>
+  <rect class="hl" x="246" y="218" width="438" height="32" rx="4"/>
+  <text x="258" y="239">SK = ORDER#2026-10-29#a7d2</text>
+  <text class="muted" x="672" y="239" text-anchor="end">total, status</text>
+
+  <path class="q" d="M240 178 H234 V250 H240"/>
+
+  <text x="360" y="296" text-anchor="middle" style="fill:#c084fc">Query PK = CUSTOMER#42 AND begins_with(SK, 'ORDER#')</text>
+  <text class="muted" x="360" y="313" text-anchor="middle">One partition, one contiguous range of the sort order.</text>
+</svg>

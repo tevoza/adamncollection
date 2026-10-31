@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" role="img" aria-labelledby="t">
+  <title id="t">B-tree lookup for key 145: root, then the internal page for 100 to 199, then the leaf for 130 to 159; a range scan continues right along the linked leaves</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .small { font-size: 12.5px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2.25; }
+    .edge { fill: none; stroke: #3a4d6b; stroke-width: 1.5; }
+    .path { fill: none; stroke: #7dd3fc; stroke-width: 2.25; }
+    .link { fill: none; stroke: #3a4d6b; stroke-width: 1.5; }
+    .range { fill: none; stroke: #c084fc; stroke-width: 2.25; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/></marker>
+    <marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c084fc"/></marker>
+  </defs>
+  <rect width="720" height="340" fill="#08111f"/>
+
+  <text class="muted" x="470" y="55">root</text>
+  <rect class="hl" x="270" y="30" width="180" height="40" rx="5"/>
+  <text x="360" y="56" text-anchor="middle">100 │ 200</text>
+
+  <text class="muted" x="40" y="112">internal pages</text>
+  <rect class="box" x="40" y="120" width="160" height="40" rx="5"/>
+  <text x="120" y="146" text-anchor="middle">30 │ 60</text>
+  <rect class="hl" x="280" y="120" width="160" height="40" rx="5"/>
+  <text x="360" y="146" text-anchor="middle">130 │ 160</text>
+  <rect class="box" x="520" y="120" width="160" height="40" rx="5"/>
+  <text x="600" y="146" text-anchor="middle">230 │ 260</text>
+
+  <path class="edge" d="M300 70 L120 120"/>
+  <path class="path" d="M360 70 L360 116" marker-end="url(#a)"/>
+  <path class="edge" d="M420 70 L600 120"/>
+
+  <text class="muted" x="20" y="212">leaf pages: key → ctid</text>
+  <rect class="box" x="20" y="220" width="80" height="40" rx="5"/>
+  <text class="small" x="60" y="245" text-anchor="middle">…</text>
+  <rect class="box" x="118" y="220" width="80" height="40" rx="5"/>
+  <text class="small" x="158" y="245" text-anchor="middle">…</text>
+  <rect class="box" x="216" y="220" width="80" height="40" rx="5"/>
+  <text class="small" x="256" y="245" text-anchor="middle">100–129</text>
+  <rect class="hl" x="314" y="220" width="80" height="40" rx="5"/>
+  <text class="small" x="354" y="245" text-anchor="middle">130–159</text>
+  <rect class="box" x="412" y="220" width="80" height="40" rx="5"/>
+  <text class="small" x="452" y="245" text-anchor="middle">160–199</text>
+  <rect class="box" x="510" y="220" width="80" height="40" rx="5"/>
+  <text class="small" x="550" y="245" text-anchor="middle">…</text>
+  <rect class="box" x="608" y="220" width="80" height="40" rx="5"/>
+  <text class="small" x="648" y="245" text-anchor="middle">…</text>
+
+  <path class="edge" d="M90 160 L60 220"/>
+  <path class="edge" d="M150 160 L158 220"/>
+  <path class="edge" d="M300 160 L256 220"/>
+  <path class="path" d="M360 160 L355 216" marker-end="url(#a)"/>
+  <path class="edge" d="M420 160 L452 220"/>
+  <path class="edge" d="M570 160 L550 220"/>
+  <path class="edge" d="M630 160 L648 220"/>
+
+  <path class="link" d="M100 240 H118 M198 240 H216 M296 240 H314 M492 240 H510 M590 240 H608"/>
+  <path class="range" d="M394 240 H408" marker-end="url(#p)"/>
+
+  <text class="muted" x="354" y="278" text-anchor="middle">145 is here</text>
+
+  <text class="muted" x="360" y="308" text-anchor="middle">Lookup for 145 (blue): one page per level, root → internal → leaf.</text>
+  <text class="muted" x="360" y="326" text-anchor="middle">Range 145–175 (purple): same descent, then walk right along the linked leaves.</text>
+</svg>

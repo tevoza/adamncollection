@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 390" role="img" aria-labelledby="t">
+  <title id="t">LSM tree: writes go to a log and an in-memory memtable, which is flushed to immutable sorted SST files and compacted in the background; reads check the memtable, then only the files a Bloom filter can't rule out</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
+    .small { font-size: 12px; }
+    .muted { fill: #9baeca; font-size: 11.5px; }
+    .region { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .rd { fill: #13233b; stroke: #c084fc; stroke-width: 2; }
+    .w { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .r { fill: none; stroke: #c084fc; stroke-width: 1.75; stroke-dasharray: 5 3; }
+    .c { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/></marker>
+    <marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c084fc"/></marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/></marker>
+  </defs>
+  <rect width="720" height="390" fill="#08111f"/>
+
+  <rect class="region" x="20" y="36" width="680" height="110" rx="8"/>
+  <text class="muted" x="32" y="54">memory</text>
+  <rect class="region" x="20" y="170" width="680" height="170" rx="8"/>
+  <text class="muted" x="32" y="188">disk</text>
+
+  <rect class="hl" x="36" y="68" width="96" height="56" rx="5"/>
+  <text x="84" y="101" text-anchor="middle">write</text>
+  <rect class="hl" x="180" y="68" width="170" height="56" rx="5"/>
+  <text x="265" y="93" text-anchor="middle">memtable</text>
+  <text class="muted" x="265" y="112" text-anchor="middle">sorted, mutable</text>
+  <path class="w" d="M132 96 H176" marker-end="url(#a)"/>
+
+  <rect class="box" x="36" y="204" width="110" height="46" rx="5"/>
+  <text x="91" y="225" text-anchor="middle">log</text>
+  <text class="muted" x="91" y="242" text-anchor="middle">append-only</text>
+  <path class="w" d="M84 124 V200" marker-end="url(#a)"/>
+
+  <text class="small" x="196" y="230" text-anchor="end">L0</text>
+  <rect class="box" x="206" y="208" width="66" height="36" rx="4"/>
+  <text class="small" x="239" y="231" text-anchor="middle">SST</text>
+  <rect class="box" x="280" y="208" width="66" height="36" rx="4"/>
+  <text class="small" x="313" y="231" text-anchor="middle">SST</text>
+  <rect class="box" x="354" y="208" width="66" height="36" rx="4"/>
+  <text class="small" x="387" y="231" text-anchor="middle">SST</text>
+  <path class="w" d="M265 124 V204" marker-end="url(#a)"/>
+  <text class="muted" x="276" y="168">flush when full</text>
+
+  <text class="small" x="196" y="300" text-anchor="end">L1</text>
+  <rect class="box" x="206" y="278" width="80" height="36" rx="4"/>
+  <text class="small" x="246" y="301" text-anchor="middle">SST</text>
+  <rect class="box" x="294" y="278" width="80" height="36" rx="4"/>
+  <text class="small" x="334" y="301" text-anchor="middle">SST</text>
+  <rect class="box" x="382" y="278" width="80" height="36" rx="4"/>
+  <text class="small" x="422" y="301" text-anchor="middle">SST</text>
+  <rect class="box" x="470" y="278" width="80" height="36" rx="4"/>
+  <text class="small" x="510" y="301" text-anchor="middle">SST</text>
+  <path class="c" d="M387 244 C400 262, 410 262, 422 274" marker-end="url(#m)"/>
+  <text class="muted" x="436" y="232">compaction: merge files,</text>
+  <text class="muted" x="436" y="248">drop overwritten/deleted keys</text>
+
+  <rect class="rd" x="560" y="68" width="124" height="56" rx="5"/>
+  <text x="622" y="93" text-anchor="middle">read k</text>
+  <text class="muted" x="622" y="112" text-anchor="middle">newest first</text>
+  <path class="r" d="M560 96 H354" marker-end="url(#p)"/>
+  <text class="muted" x="457" y="88" text-anchor="middle">1. memtable</text>
+
+  <rect class="rd" x="572" y="204" width="112" height="56" rx="5"/>
+  <text class="small" x="628" y="227" text-anchor="middle">Bloom filter</text>
+  <text class="muted" x="628" y="246" text-anchor="middle">per file</text>
+  <path class="r" d="M622 124 V200" marker-end="url(#p)"/>
+  <text class="muted" x="632" y="168">2. files</text>
+  <path class="r" d="M628 260 V296 H554" marker-end="url(#p)"/>
+
+  <text class="muted" x="360" y="362" text-anchor="middle">Writes: append to the log, insert into the memtable, flush whole sorted files.</text>
+  <text class="muted" x="360" y="380" text-anchor="middle">Reads: memtable first, then only the files a Bloom filter can't rule out.</text>
+</svg>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" role="img" aria-labelledby="t">
+  <title id="t">Layout of an 8KB Postgres page: header, line pointers growing forward, free space, tuples growing backward</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+  </defs>
+  <rect width="720" height="360" fill="#08111f"/>
+
+  <rect x="60" y="30" width="600" height="280" rx="6" fill="none" stroke="#3a4d6b" stroke-width="1.5"/>
+
+  <rect class="box" x="60" y="30" width="600" height="36" rx="6"/>
+  <text x="76" y="53">page header (24 bytes)</text>
+  <text class="muted" x="644" y="53" text-anchor="end">8KB page</text>
+
+  <rect class="hl" x="68" y="74" width="80" height="30" rx="4"/>
+  <text x="108" y="94" text-anchor="middle">lp 1</text>
+  <rect class="hl" x="156" y="74" width="80" height="30" rx="4"/>
+  <text x="196" y="94" text-anchor="middle">lp 2</text>
+  <rect class="hl" x="244" y="74" width="80" height="30" rx="4"/>
+  <text x="284" y="94" text-anchor="middle">lp 3</text>
+  <path class="dir" d="M336 89 H410" marker-end="url(#m)"/>
+  <text class="muted" x="420" y="93">line pointers grow forward</text>
+
+  <text class="muted" x="360" y="166" text-anchor="middle">free space</text>
+
+  <path class="dir" d="M230 192 H156" marker-end="url(#m)"/>
+  <text class="muted" x="240" y="196">tuples grow backward</text>
+
+  <rect class="box" x="232" y="216" width="136" height="80" rx="4"/>
+  <text x="300" y="250" text-anchor="middle">tuple 3</text>
+  <text class="muted" x="300" y="270" text-anchor="middle">header + data</text>
+  <rect class="box" x="376" y="216" width="136" height="80" rx="4"/>
+  <text x="444" y="250" text-anchor="middle">tuple 2</text>
+  <text class="muted" x="444" y="270" text-anchor="middle">header + data</text>
+  <rect class="box" x="520" y="216" width="132" height="80" rx="4"/>
+  <text x="586" y="250" text-anchor="middle">tuple 1</text>
+  <text class="muted" x="586" y="270" text-anchor="middle">header + data</text>
+
+  <path class="ptr" d="M108 104 C108 170, 586 150, 586 212" marker-end="url(#a)"/>
+  <path class="ptr" d="M196 104 C196 175, 444 160, 444 212" marker-end="url(#a)"/>
+  <path class="ptr" d="M284 104 C284 165, 300 175, 300 212" marker-end="url(#a)"/>
+
+  <text class="muted" x="360" y="335" text-anchor="middle">ctid = (page number, line pointer). A tuple can move within the page;</text>
+  <text class="muted" x="360" y="352" text-anchor="middle">its line pointer stays put, so nothing that points at the row has to change.</text>
+</svg>
