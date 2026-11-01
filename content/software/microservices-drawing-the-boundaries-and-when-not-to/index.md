@@ -1,7 +1,7 @@
 ---
 title: "Microservices: Drawing the Boundaries, and When Not To"
 date: 2026-11-01T12:00:00+02:00
-draft: true
+draft: false
 tags: ["software", "architecture", "microservices", "ddd", "distributed-systems", "dotnet", "ai-generated"]
 description: "The smells of a badly split system — a distributed monolith, a shared database, five-hop call chains, transactions across services — what fixes each, and why most systems should start as a modular monolith."
 ---

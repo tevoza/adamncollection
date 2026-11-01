@@ -1,7 +1,7 @@
 ---
 title: "SSL, TLS and Certificates: What Backend Developers Actually Need to Understand"
 date: 2026-10-31T20:00:00+02:00
-draft: true
+draft: false
 tags: ["software", "security", "tls", "ssl", "certificates", "pki", "mtls", "openssl", "cryptography", "ai-generated"]
 description: "Keys, signatures, certificates, chains of trust, the TLS 1.3 handshake, mutual TLS and the OpenSSL commands that go with them, explained for developers who use HTTPS every day and want to know what it's actually doing."
 ---

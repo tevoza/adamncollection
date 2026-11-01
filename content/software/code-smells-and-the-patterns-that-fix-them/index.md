@@ -1,7 +1,7 @@
 ---
 title: "Code Smells and the Patterns That Fix Them"
 date: 2026-10-31T14:00:00+02:00
-draft: true
+draft: false
 tags: ["software", "architecture", "csharp", "dotnet", "design-patterns", "solid", "clean-architecture", "ai-generated"]
 description: "SOLID, the Gang of Four patterns, onion architecture, DDD and CQRS, learned backwards: start from a smell in a C# payments codebase, refactor it, then name the principle the fix turned out to be."
 ---
