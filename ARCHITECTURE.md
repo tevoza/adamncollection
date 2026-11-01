@@ -36,6 +36,7 @@ No theme, no theme submodule — `layouts/` is hand-written:
 - `layouts/_default/list.html` — section/list pages (e.g. `/software/`): entry count + list of pages in that section, newest first.
 - `layouts/_default/single.html` — a single entry: date (plus a revised date when `lastmod` is set), title, description, tags, content.
 - `layouts/cv/list.html` — the CV at `/cv/` (see below). Standalone: it doesn't use `baseof.html`.
+- `layouts/shortcodes/answer.html` — `{{< answer >}}markdown{{< /answer >}}` renders a collapsed "Show answer" block, for practice questions. Needed because Goldmark's raw HTML is off.
 
 Styling is hand-written CSS with no bundler. `site.css` and `chroma.css` are linked from `baseof.html`; the CV has its own.
 

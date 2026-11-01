@@ -426,3 +426,21 @@ blockquote {
     padding: 1.25rem;
   }
 }
+
+details.answer {
+  margin: 0.75rem 0 1.5rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent-strong);
+  border-radius: 0.75rem;
+  background: rgba(6, 14, 26, 0.6);
+}
+
+details.answer > summary {
+  cursor: pointer;
+  color: var(--accent-strong);
+}
+
+details.answer[open] > summary {
+  margin-bottom: 0.5rem;
+}

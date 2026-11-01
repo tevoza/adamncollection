@@ -1,0 +1,5 @@
+{{- /* Collapsible answer for practice questions: {{< answer >}}markdown{{< /answer >}} */ -}}
+<details class="answer">
+  <summary>{{ with .Get 0 }}{{ . }}{{ else }}Show answer{{ end }}</summary>
+  {{ .Inner | .Page.RenderString (dict "display" "block") }}
+</details>
