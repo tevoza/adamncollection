@@ -21,6 +21,8 @@ tags: []
 description: ""
 ```
 
+An entry that has been meaningfully revised after publishing also carries `lastmod:` (same format) on the line after `date`. `date` stays the original publish date. `single.html` shows "Revised <date>" when `lastmod` falls on a later day than `date`. `lastmod` is set by hand, not from git (`enableGitInfo` is off), so typo fixes don't count as revisions.
+
 New entries are scaffolded with `hugo new content <section>/<name>.md`, which fills this in from `archetypes/default.md` (defaults to `draft: true`).
 
 Adding a new section means: create `content/<section>/_index.md` with `title`/`description`, and add a matching entry under `[[menu.main]]` in `hugo.toml` if it should appear in the nav.
@@ -32,7 +34,7 @@ No theme, no theme submodule — `layouts/` is hand-written:
 - `layouts/_default/baseof.html` — page shell: `<head>`, header/nav (renders `.Site.Menus.main`), footer, and a `{{ block "main" . }}` that child templates fill in.
 - `layouts/index.html` — homepage: hero, hand-built section cards for `software`/`thoughts`/`food`/`book-reviews` with live entry counts, and the 6 most recent posts site-wide.
 - `layouts/_default/list.html` — section/list pages (e.g. `/software/`): entry count + list of pages in that section, newest first.
-- `layouts/_default/single.html` — a single entry: date, title, description, tags, content.
+- `layouts/_default/single.html` — a single entry: date (plus a revised date when `lastmod` is set), title, description, tags, content.
 - `layouts/cv/list.html` — the CV at `/cv/` (see below). Standalone: it doesn't use `baseof.html`.
 
 Styling is hand-written CSS with no bundler. `site.css` and `chroma.css` are linked from `baseof.html`; the CV has its own.

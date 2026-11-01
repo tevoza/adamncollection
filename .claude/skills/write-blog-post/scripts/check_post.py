@@ -42,6 +42,11 @@ def check_post(bundle):
         fm = front.group(1)
         draft = re.search(r"^draft:\s*true\s*$", fm, re.M) is not None
         print("draft: " + ("true" if draft else "false (published; leave it unless the user asks)"))
+        date = re.search(r"^date:\s*(\S+)", fm, re.M)
+        lastmod = re.search(r"^lastmod:\s*(\S+)", fm, re.M)
+        print("lastmod: " + (lastmod.group(1) if lastmod else "not set (set it as the last step of a revision)"))
+        if date and lastmod and lastmod.group(1)[:10] < date.group(1)[:10]:
+            problems.append("lastmod is earlier than date")
         if '"ai-generated"' not in fm:
             problems.append('tags are missing "ai-generated" (it drives the disclosure banner)')
 
@@ -97,7 +102,12 @@ def main():
     if build.returncode != 0:
         print("Hugo build failed:\n" + build.stdout + build.stderr)
         return 1
-    print("build: ok")
+    # A live post that relrefs a draft builds with -D but breaks the real deploy.
+    prod = subprocess.run([hugo, "--destination", dest + "-prod", "--quiet"], capture_output=True, text=True)
+    if prod.returncode != 0:
+        print("Production build (no drafts) failed, often a published post linking to a draft:\n" + prod.stdout + prod.stderr)
+        return 1
+    print("build: ok (with and without drafts)")
 
     problems, warnings, footnotes, words, sections = check_post(bundle)
     print(f"footnotes: {footnotes}, prose words (excluding code and footnotes): {words}")

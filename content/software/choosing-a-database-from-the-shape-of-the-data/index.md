@@ -1,6 +1,7 @@
 ---
 title: "Choosing a Database From the Shape of the Data"
 date: 2026-10-31T10:00:00+02:00
+lastmod: 2026-11-01T12:00:00+02:00
 draft: false
 tags: ["software", "architecture", "databases", "sql", "nosql", "postgres", "dynamodb", "cosmosdb", "clickhouse", "ai-generated"]
 description: "Reading a workload's shape and persistence requirements, then picking between relational, document/key-value, columnar, DynamoDB and Cosmos DB — plus how pages, MVCC, the WAL and B-tree indexes actually work underneath."

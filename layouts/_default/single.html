@@ -4,7 +4,13 @@
       {{ with .CurrentSection }}
         <p class="post-kicker"><a href="{{ .RelPermalink }}">{{ .Title }}</a></p>
       {{ end }}
-      <p class="eyebrow">{{ .Date.Format "January 2, 2006" }}</p>
+      <p class="eyebrow">
+        <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "January 2, 2006" }}</time>
+        {{- /* Only show a revision when lastmod is set and falls on a later day than the publish date. */ -}}
+        {{ if and .Params.lastmod (gt (.Lastmod.Format "2006-01-02") (.Date.Format "2006-01-02")) }}
+          · Revised <time datetime="{{ .Lastmod.Format "2006-01-02" }}">{{ .Lastmod.Format "January 2, 2006" }}</time>
+        {{ end }}
+      </p>
       <h1>{{ .Title }}</h1>
       {{ with .Description }}
         <p class="post-description">{{ . }}</p>

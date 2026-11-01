@@ -27,9 +27,10 @@ The user's "pattern" is everything in sections 2–5 below: front matter convent
 3. **Interpret the extra instructions against that review.** Say how you read them, especially if they're brief ("make it like the code smells one" means structure and style, not content). Where they conflict with the pattern, the instructions win. For "tighter", give a rough expected reduction (e.g. "about 25–30% of prose words"). That's an estimate of what the cuts will yield, not a target.
 4. **Propose a short plan:** what you'll change, what you'll leave, and anything that needs the user's call (cutting a section, changing the angle). If the post is `draft: false`, say plainly that it's live and pushing the revision changes the public page. Get a go-ahead before large rewrites. Small mechanical fixes don't need one.
 5. **Apply it**, keeping every code sample, diagram and sourced claim unless the plan says otherwise. Verify any claim whose wording you change or that you add. Then run the build check (section 6). For substantial revisions, do one independent review round (section 7). For light tightening, your own pass is enough. Say which you did.
-6. **Report** what changed and the before/after prose word count (the check script prints it), so the user can see how much tighter the post is.
+6. **Stamp the revision.** As the final edit, after the review round, set `lastmod:` in the front matter to now (ISO 8601 with `+02:00`, on the line after `date:`). The post page shows "Revised <date>" next to the publish date whenever `lastmod` falls on a later day. Set it only for changes a reader would care about: content, corrections, new or redrawn diagrams. Skip it for typo fixes and for drafts, since an unpublished post has no earlier version for readers to compare against.
+7. **Report** what changed and the before/after prose word count (the check script prints it), so the user can see how much tighter the post is.
 
-Don't touch `draft`, the date or the slug unless asked. Changing the slug breaks links and `relref`s from other posts.
+Don't touch `draft`, `date` or the slug unless asked. `date` is the original publish date, and revisions go in `lastmod`. Changing the slug breaks links and `relref`s from other posts.
 
 ## 1. Plan before writing
 
@@ -78,7 +79,7 @@ The user likes SVG diagrams — use one wherever a picture shows a mechanism bet
 
 ## 6. Build check
 
-Run `python .claude/skills/write-blog-post/scripts/check_post.py content/<section>/<slug>` from the repo root. It builds the site with drafts into a temp folder (finding Hugo even when it isn't on PATH), checks footnotes and image links, flags diagram text under 12px or colours outside the palette, and prints prose word counts per `##` section (useful for deciding where to cut). Fix anything it reports as a problem; colour warnings may be deliberate.
+Run `python .claude/skills/write-blog-post/scripts/check_post.py content/<section>/<slug>` from the repo root. It builds the site twice into a temp folder, with and without drafts (finding Hugo even when it isn't on PATH); the second build catches a published post that `relref`s a draft, which would break the deploy. It also checks footnotes and image links, flags diagram text under 12px or colours outside the palette, and prints prose word counts per `##` section (useful for deciding where to cut). Fix anything it reports as a problem; colour warnings may be deliberate.
 
 For the user to preview, start `hugo server -D` in the background and give them the post URL (the site lives under `/adamncollection/`; the port is printed on startup).
 
