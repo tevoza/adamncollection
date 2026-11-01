@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 340" role="img" aria-labelledby="t">
+  <title id="t">Exam blueprint weights as horizontal bars: Applications and Integration 33.1%, Model Selection and Optimization 16.8%, Agents and Workflows 14.7%, Prompt and Context Engineering 11.0%, Tools and MCPs 10.6%, Security and Safety 8.1%, Claude Code 3.1%, Eval, Testing and Debugging 2.6%</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .bar { fill: #7dd3fc; }
+    .top { fill: #c084fc; }
+  </style>
+  <rect width="800" height="340" fill="#08111f"/>
+  <text x="20" y="55">Applications &amp; Integration</text>
+  <rect class="top" x="320" y="40" width="400" height="22" rx="4"/>
+  <text class="muted" x="728" y="55">33.1%</text>
+  <text x="20" y="89">Model Selection &amp; Optimization</text>
+  <rect class="bar" x="320" y="74" width="203" height="22" rx="4"/>
+  <text class="muted" x="531" y="89">16.8%</text>
+  <text x="20" y="123">Agents &amp; Workflows</text>
+  <rect class="bar" x="320" y="108" width="178" height="22" rx="4"/>
+  <text class="muted" x="506" y="123">14.7%</text>
+  <text x="20" y="157">Prompt &amp; Context Engineering</text>
+  <rect class="bar" x="320" y="142" width="133" height="22" rx="4"/>
+  <text class="muted" x="461" y="157">11.0%</text>
+  <text x="20" y="191">Tools &amp; MCPs</text>
+  <rect class="bar" x="320" y="176" width="128" height="22" rx="4"/>
+  <text class="muted" x="456" y="191">10.6%</text>
+  <text x="20" y="225">Security &amp; Safety</text>
+  <rect class="bar" x="320" y="210" width="98" height="22" rx="4"/>
+  <text class="muted" x="426" y="225">8.1%</text>
+  <text x="20" y="259">Claude Code</text>
+  <rect class="bar" x="320" y="244" width="37" height="22" rx="4"/>
+  <text class="muted" x="365" y="259">3.1%</text>
+  <text x="20" y="293">Eval, Testing &amp; Debugging</text>
+  <rect class="bar" x="320" y="278" width="31" height="22" rx="4"/>
+  <text class="muted" x="359" y="293">2.6%</text>
+  <text class="muted" x="400" y="332" text-anchor="middle">approximate share of scored items per domain (exam guide v1.0)</text>
+</svg>

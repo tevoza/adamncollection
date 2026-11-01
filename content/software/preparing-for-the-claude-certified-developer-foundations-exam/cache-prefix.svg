@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 230" role="img" aria-labelledby="t">
+  <title id="t">The cache prefix is evaluated in order: tools, then system, then messages. A cache_control breakpoint after the system prompt caches the tool definitions and system prompt; the conversation messages after the breakpoint are processed normally. Changing a tool invalidates everything after it</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .acc { fill: #7dd3fc; font-size: 12px; }
+    .bad { fill: #fca5a5; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .mark { stroke: #c084fc; stroke-width: 2; stroke-dasharray: 5 4; }
+    .brace { fill: none; stroke: #7dd3fc; stroke-width: 1.5; }
+  </style>
+  <rect width="800" height="230" fill="#08111f"/>
+
+  <path class="brace" d="M40 52 V42 H470 V52"/>
+  <text class="acc" x="255" y="34" text-anchor="middle">cached prefix: reads billed at a fraction of input price</text>
+
+  <rect class="hl" x="40" y="62" width="180" height="56" rx="6"/>
+  <text x="130" y="88" text-anchor="middle">tools</text>
+  <text class="muted" x="130" y="106" text-anchor="middle">definitions</text>
+
+  <rect class="hl" x="230" y="62" width="240" height="56" rx="6"/>
+  <text x="350" y="88" text-anchor="middle">system</text>
+  <text class="muted" x="350" y="106" text-anchor="middle">policy, refund rules</text>
+
+  <rect class="box" x="490" y="62" width="270" height="56" rx="6"/>
+  <text x="625" y="88" text-anchor="middle">messages</text>
+  <text class="muted" x="625" y="106" text-anchor="middle">the conversation so far</text>
+
+  <line class="mark" x1="480" y1="52" x2="480" y2="132"/>
+  <text class="muted" x="480" y="150" text-anchor="middle">cache_control breakpoint</text>
+  <text class="muted" x="670" y="150" text-anchor="middle">processed normally</text>
+
+  <text class="bad" x="40" y="192">change a tool → tools, system and messages all miss</text>
+  <text class="bad" x="40" y="212">change the system prompt → system and messages miss (tools hit only with their own breakpoint)</text>
+</svg>

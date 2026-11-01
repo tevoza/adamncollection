@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 330" role="img" aria-labelledby="t">
+  <title id="t">The client tool loop. The application sends messages and tool definitions to Claude. Claude replies with stop_reason tool_use and a tool_use block naming the tool and its input. The application runs the tool against the payments service and sends a tool_result block with the matching tool_use_id. Claude then answers, or calls another tool</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .alt { fill: none; stroke: #c084fc; stroke-width: 1.75; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c084fc"/>
+    </marker>
+  </defs>
+  <rect width="800" height="330" fill="#08111f"/>
+
+  <rect class="box" x="40" y="40" width="220" height="200" rx="8"/>
+  <text x="150" y="132" text-anchor="middle">your application</text>
+  <text class="muted" x="150" y="152" text-anchor="middle">owns history, runs tools</text>
+
+  <rect class="hl" x="540" y="40" width="220" height="200" rx="8"/>
+  <text x="650" y="132" text-anchor="middle">Claude</text>
+  <text class="muted" x="650" y="152" text-anchor="middle">decides when to call</text>
+
+  <text class="muted" x="400" y="70" text-anchor="middle">1  messages + tool definitions</text>
+  <path class="ptr" d="M260 80 H536" marker-end="url(#a)"/>
+
+  <text class="muted" x="400" y="110" text-anchor="middle">2  tool_use: name + input</text>
+  <path class="alt" d="M540 120 H264" marker-end="url(#p)"/>
+
+  <text class="muted" x="400" y="170" text-anchor="middle">4  tool_result, same tool_use_id</text>
+  <path class="ptr" d="M260 180 H536" marker-end="url(#a)"/>
+
+  <text class="muted" x="400" y="210" text-anchor="middle">5  answer, or another tool_use</text>
+  <path class="alt" d="M540 220 H264" marker-end="url(#p)"/>
+
+  <path class="ptr" d="M150 240 V272" marker-end="url(#a)"/>
+  <text class="muted" x="162" y="262">3  run the tool</text>
+  <rect class="box" x="40" y="276" width="220" height="40" rx="6"/>
+  <text x="150" y="301" text-anchor="middle">payments service</text>
+</svg>

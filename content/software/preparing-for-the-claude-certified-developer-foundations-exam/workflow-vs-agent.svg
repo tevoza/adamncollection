@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320" role="img" aria-labelledby="t">
+  <title id="t">Left: a workflow, where code fixes the path. A router classifies the ticket and sends it to one of two fixed prompt chains, with a code gate between steps. Right: an agent, where the model chooses its own next step in a loop of thinking, calling a tool and reading the result until the task is done, under guardrails</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .gate { fill: #0d1829; stroke: #c084fc; stroke-width: 1.5; stroke-dasharray: 4 3; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .dash { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+  </style>
+  <defs>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+  </defs>
+  <rect width="800" height="320" fill="#08111f"/>
+
+  <!-- Workflow -->
+  <text x="20" y="32">workflow: code fixes the path</text>
+  <rect class="hl" x="20" y="130" width="90" height="40" rx="6"/>
+  <text x="65" y="155" text-anchor="middle">router</text>
+
+  <path class="dir" d="M110 140 L146 100" marker-end="url(#m)"/>
+  <path class="dir" d="M110 160 L146 200" marker-end="url(#m)"/>
+
+  <rect class="box" x="150" y="76" width="60" height="40" rx="6"/>
+  <text x="180" y="101" text-anchor="middle">step</text>
+  <path class="dir" d="M210 96 H226" marker-end="url(#m)"/>
+  <rect class="gate" x="230" y="76" width="60" height="40" rx="6"/>
+  <text x="260" y="101" text-anchor="middle">gate</text>
+  <path class="dir" d="M290 96 H306" marker-end="url(#m)"/>
+  <rect class="box" x="310" y="76" width="60" height="40" rx="6"/>
+  <text x="340" y="101" text-anchor="middle">step</text>
+
+  <rect class="box" x="150" y="184" width="60" height="40" rx="6"/>
+  <text x="180" y="209" text-anchor="middle">step</text>
+  <path class="dir" d="M210 204 H226" marker-end="url(#m)"/>
+  <rect class="gate" x="230" y="184" width="60" height="40" rx="6"/>
+  <text x="260" y="209" text-anchor="middle">gate</text>
+  <path class="dir" d="M290 204 H306" marker-end="url(#m)"/>
+  <rect class="box" x="310" y="184" width="60" height="40" rx="6"/>
+  <text x="340" y="209" text-anchor="middle">step</text>
+
+  <text class="muted" x="195" y="268" text-anchor="middle">predictable, cheap, easy to test</text>
+
+  <line class="dash" x1="400" y1="20" x2="400" y2="300"/>
+
+  <!-- Agent -->
+  <text x="420" y="32">agent: the model picks each step</text>
+  <rect class="hl" x="460" y="60" width="130" height="40" rx="6"/>
+  <text x="525" y="85" text-anchor="middle">think</text>
+  <rect class="hl" x="640" y="140" width="130" height="40" rx="6"/>
+  <text x="705" y="165" text-anchor="middle">call tool</text>
+  <rect class="hl" x="460" y="220" width="130" height="40" rx="6"/>
+  <text x="525" y="245" text-anchor="middle">read result</text>
+
+  <path class="ptr" d="M590 90 L660 136" marker-end="url(#a)"/>
+  <path class="ptr" d="M680 180 L594 236" marker-end="url(#a)"/>
+  <path class="ptr" d="M500 220 V104" marker-end="url(#a)"/>
+
+  <path class="dir" d="M590 70 H700" marker-end="url(#m)"/>
+  <text class="muted" x="708" y="74">done</text>
+
+  <text class="muted" x="600" y="296" text-anchor="middle">under guardrails: permissions, hooks, max turns</text>
+</svg>

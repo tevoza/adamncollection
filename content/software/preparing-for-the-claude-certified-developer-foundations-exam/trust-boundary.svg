@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 330" role="img" aria-labelledby="t">
+  <title id="t">Trust boundary in the support assistant. Trusted instructions (the system prompt and the merchant's request) sit on one side. Untrusted content (provider messages, fetched pages, uploaded files) enters only inside tool_result blocks, JSON-encoded and screened by a small classifier. A PreToolUse hook stands between Claude and the refund tool, so injected text cannot trigger a refund without approval</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .bad { fill: #fca5a5; font-size: 12px; }
+    .acc { fill: #7dd3fc; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .badbox { fill: #2a1620; stroke: #f87171; stroke-width: 1.5; }
+    .gate { fill: #13233b; stroke: #c084fc; stroke-width: 2; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+    .line { stroke: #f87171; stroke-width: 1.5; stroke-dasharray: 6 4; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+  </defs>
+  <rect width="800" height="330" fill="#08111f"/>
+
+  <text class="acc" x="130" y="30" text-anchor="middle">trusted</text>
+  <rect class="box" x="30" y="44" width="200" height="40" rx="6"/>
+  <text x="130" y="69" text-anchor="middle">system prompt</text>
+  <rect class="box" x="30" y="104" width="200" height="40" rx="6"/>
+  <text x="130" y="129" text-anchor="middle">merchant request</text>
+  <path class="ptr" d="M230 64 L316 92" marker-end="url(#a)"/>
+  <path class="ptr" d="M230 124 L316 112" marker-end="url(#a)"/>
+
+  <rect class="hl" x="320" y="70" width="160" height="70" rx="8"/>
+  <text x="400" y="110" text-anchor="middle">Claude</text>
+
+  <line class="line" x1="530" y1="20" x2="530" y2="104"/>
+  <line class="line" x1="530" y1="128" x2="530" y2="190"/>
+  <text class="bad" x="670" y="30" text-anchor="middle">untrusted</text>
+  <rect class="badbox" x="570" y="44" width="200" height="56" rx="6"/>
+  <text x="670" y="67" text-anchor="middle">third-party text</text>
+  <text class="muted" x="670" y="87" text-anchor="middle">provider msgs, web, files</text>
+  <path class="dir" d="M670 100 V126" marker-end="url(#m)"/>
+  <rect class="box" x="570" y="130" width="200" height="40" rx="6"/>
+  <text x="670" y="155" text-anchor="middle">screen: Haiku 5.5</text>
+  <path class="dir" d="M570 150 L484 126" marker-end="url(#m)"/>
+  <text class="muted" x="550" y="116" text-anchor="middle">JSON in tool_result</text>
+
+  <path class="ptr" d="M340 140 V216" marker-end="url(#a)"/>
+  <rect class="gate" x="300" y="220" width="200" height="44" rx="6"/>
+  <text x="400" y="247" text-anchor="middle">PreToolUse hook</text>
+  <path class="ptr" d="M500 242 H566" marker-end="url(#a)"/>
+  <text class="muted" x="533" y="234" text-anchor="middle">approved</text>
+  <rect class="box" x="570" y="220" width="200" height="44" rx="6"/>
+  <text x="670" y="247" text-anchor="middle">refund_payment</text>
+
+  <text class="muted" x="400" y="306" text-anchor="middle">injected text can reach Claude, but cannot trigger a refund on its own</text>
+</svg>
