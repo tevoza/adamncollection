@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320" role="img" aria-labelledby="t">
+  <title id="t">The same Where lambda on two static types. On IQueryable it becomes an expression tree that EF translates, so the database runs WHERE IsActive = 1 and only matching rows cross the network. On IEnumerable it becomes a compiled delegate, so the database sends every row and the filter runs in the application process</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .bad { fill: #fca5a5; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .badbox { fill: #2a1620; stroke: #f87171; stroke-width: 1.5; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+    .badptr { fill: none; stroke: #f87171; stroke-width: 3; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f87171"/>
+    </marker>
+  </defs>
+  <rect width="800" height="320" fill="#08111f"/>
+
+  <text class="muted" x="160" y="26" text-anchor="middle">your process</text>
+  <text class="muted" x="640" y="26" text-anchor="middle">database</text>
+
+  <!-- IQueryable -->
+  <text x="20" y="50">IQueryable&lt;User&gt;</text>
+  <rect class="box" x="20" y="60" width="280" height="64" rx="6"/>
+  <text x="160" y="86" text-anchor="middle">Where(u =&gt; u.IsActive)</text>
+  <text class="muted" x="160" y="106" text-anchor="middle">expression tree, translated</text>
+  <rect class="hl" x="500" y="60" width="280" height="64" rx="6"/>
+  <text x="640" y="86" text-anchor="middle">WHERE IsActive = 1</text>
+  <text class="muted" x="640" y="106" text-anchor="middle">filter runs here</text>
+  <path class="dir" d="M300 76 H496" marker-end="url(#m)"/>
+  <text class="muted" x="398" y="70" text-anchor="middle">SQL</text>
+  <path class="ptr" d="M500 110 H304" marker-end="url(#a)"/>
+  <text class="muted" x="400" y="126" text-anchor="middle">matching rows only</text>
+
+  <!-- IEnumerable -->
+  <text x="20" y="180">IEnumerable&lt;User&gt; (after AsEnumerable())</text>
+  <rect class="badbox" x="20" y="190" width="280" height="64" rx="6"/>
+  <text x="160" y="216" text-anchor="middle">Where(u =&gt; u.IsActive)</text>
+  <text class="bad" x="160" y="236" text-anchor="middle">delegate, filter runs here</text>
+  <rect class="box" x="500" y="190" width="280" height="64" rx="6"/>
+  <text x="640" y="216" text-anchor="middle">SELECT ... FROM Users</text>
+  <text class="muted" x="640" y="236" text-anchor="middle">no WHERE</text>
+  <path class="dir" d="M300 206 H496" marker-end="url(#m)"/>
+  <text class="muted" x="398" y="200" text-anchor="middle">SQL</text>
+  <path class="badptr" d="M500 240 H302" marker-end="url(#r)"/>
+  <text class="bad" x="400" y="268" text-anchor="middle">every row</text>
+
+  <text class="muted" x="400" y="304" text-anchor="middle">same lambda; the static type decides where it runs</text>
+</svg>

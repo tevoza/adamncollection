@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 290" role="img" aria-labelledby="t">
+  <title id="t">Two collection Includes on 100 orders. As one query, the JOIN returns 100 × 50 × 20 = 100,000 rows, each repeating the order's columns. As a split query, EF sends three queries returning 100 orders, 5,000 items and 2,000 payments, 7,100 rows in all, and stitches them together in memory</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .bad { fill: #fca5a5; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .badbox { fill: #2a1620; stroke: #f87171; stroke-width: 1.5; }
+    .dash { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+  </style>
+  <rect width="800" height="290" fill="#08111f"/>
+
+  <text x="200" y="40" text-anchor="middle">.Include(Items).Include(Payments)</text>
+  <rect class="badbox" x="40" y="64" width="320" height="166" rx="8"/>
+  <text x="200" y="104" text-anchor="middle">1 query, 2 JOINs</text>
+  <text x="200" y="140" text-anchor="middle">100 × 50 × 20</text>
+  <text class="bad" x="200" y="166" text-anchor="middle">= 100,000 rows</text>
+  <text class="muted" x="200" y="200" text-anchor="middle">order columns repeated in each</text>
+
+  <line class="dash" x1="400" y1="24" x2="400" y2="266"/>
+
+  <text x="600" y="40" text-anchor="middle">.AsSplitQuery()</text>
+  <rect class="box" x="440" y="64" width="320" height="44" rx="6"/>
+  <text x="600" y="91" text-anchor="middle">orders: 100 rows</text>
+  <rect class="box" x="440" y="125" width="320" height="44" rx="6"/>
+  <text x="600" y="152" text-anchor="middle">items: 5,000 rows</text>
+  <rect class="box" x="440" y="186" width="320" height="44" rx="6"/>
+  <text x="600" y="213" text-anchor="middle">payments: 2,000 rows</text>
+  <text class="muted" x="600" y="258" text-anchor="middle">3 queries, 7,100 rows, stitched in memory</text>
+</svg>

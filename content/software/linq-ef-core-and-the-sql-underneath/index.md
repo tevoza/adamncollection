@@ -1,6 +1,7 @@
 ---
 title: "LINQ, EF Core, and the SQL Underneath"
 date: 2026-08-07T10:00:00+02:00
+lastmod: 2026-11-01T13:56:00+02:00
 draft: false
 tags: ["software", "csharp", "dotnet", "linq", "ef-core", "dotnet-deep-dives", "ai-generated"]
 description: "Deferred execution, IQueryable vs IEnumerable, expression trees, N+1, tracking — and a full walkthrough of why an endpoint returning 50,000 rows takes fifteen seconds."
@@ -8,11 +9,11 @@ description: "Deferred execution, IQueryable vs IEnumerable, expression trees, N
 
 LINQ is the feature that makes C# pleasant, and EF Core is the reason a lot of C# is slow. Those two facts are related: LINQ is so uniform that the same syntax means "iterate this list" in one place and "generate SQL and round-trip to a database" in another, with nothing in the code to mark the difference.
 
-Fluency with LINQ is easy. What matters is being able to say what a given query turns into — how many round trips, how much data, and when.
+What matters is being able to say what a given query turns into: how many round trips, how much data, and when.
 
 ## Deferred execution
 
-The single most important thing about LINQ: most operators don't do anything when you call them.
+The most important thing about LINQ: most operators don't do anything when you call them.
 
 ```csharp
 var result = users
@@ -20,11 +21,11 @@ var result = users
     .Select(x => x.Name);
 ```
 
-Nothing has happened yet. No filtering, no projection, no iteration. `Where` returned an object that *knows how* to filter, and `Select` wrapped that in an object that knows how to project. You've built a description of a computation.
+Nothing has happened yet. `Where` returned an object that *knows how* to filter, and `Select` wrapped that in an object that knows how to project: a description of a computation.
 
-The work happens when something enumerates it — a `foreach`, or a **greedy** operator that must consume the sequence to produce its answer: `ToList`, `ToArray`, `ToDictionary`, `Count`, `Sum`, `Any`, `First`, `Single`. Add `.ToList()` to the chain above and the query runs.
+The work happens when something enumerates it: a `foreach`, or an operator that executes immediately. `ToList`, `ToArray`, `ToDictionary`, `Count` and `Sum` read everything; `Any`, `First` and `Single` read only as far as they need. Add `.ToList()` to the chain above and the query runs.
 
-The elegant consequence is composability. `Where(a).Where(b)` doesn't iterate twice; it builds a pipeline traversed once, item at a time. `.Where(x => x.IsActive).First()` doesn't filter a million records and take one — it pulls items until one matches, then stops.
+The good consequence is composability. `Where(a).Where(b)` builds a pipeline traversed once, item at a time, and `.Where(x => x.IsActive).First()` pulls items until one matches, then stops.
 
 The dangerous consequence is that a variable holding a query is not a variable holding results.
 
@@ -38,17 +39,15 @@ if (expensive.Any())                  // enumeration 1
         Console.WriteLine(u.Name);
 ```
 
-`IsEligible` runs over the collection twice. Against an in-memory list that's wasted CPU. Against a database it's two round trips. If the source is a stream, a reader, or anything else that can only be traversed once, the second enumeration returns nothing at all — or throws.
+`IsEligible` runs over the collection twice. Against an in-memory list that's wasted CPU. Against a database it's two round trips. If the source can only be traversed once (a stream, a reader), the second enumeration returns nothing or throws; if the data changes in between, the two passes silently disagree.
 
-Worse is when the query has side effects, or when the underlying data changes between enumerations and the two passes silently disagree.
+The fix is to materialise once with `.ToList()`, which commits you to holding every result in memory: right for a hundred rows, wrong for ten million. Materialise where you're done composing and about to use the results more than once.
 
-The fix is to materialise once with `.ToList()`. The tradeoff is that you've now committed to holding every result in memory and giving up streaming — which is the right call for a hundred rows and the wrong one for ten million. The rule of thumb: materialise at the point where you're done composing and about to use the results more than once.
-
-Note that this cuts against a common habit. Returning `IEnumerable<T>` from a repository method looks like good encapsulation, but it hands the caller a query whose execution timing and cost are invisible — and if the `DbContext` is disposed by then, an exception. Return `IReadOnlyList<T>` when you mean "these are the results."
+This cuts against a common habit. Returning `IEnumerable<T>` from a repository looks like good encapsulation, but it hands the caller a query whose timing and cost are invisible, and an exception if the `DbContext` is disposed by then. Return `IReadOnlyList<T>` when you mean "these are the results."
 
 ## IEnumerable vs IQueryable
 
-They look almost identical and behave completely differently. This is the distinction that separates LINQ that works from LINQ that quietly downloads your database.
+They look almost identical and behave completely differently; this is the distinction between LINQ that works and LINQ that quietly downloads your database.
 
 `IEnumerable<T>` takes `Func<T, bool>` — **compiled code**, a delegate. To filter, it must run that delegate against each item, in memory, in your process.
 
@@ -66,9 +65,11 @@ var b = _db.Users.AsEnumerable().Where(u => u.IsActive).ToList();
 // SELECT ... FROM Users     <- every row, then filtered in memory
 ```
 
-The second version loads the entire table across the network and filters it in your process. On a table of ten million rows this is the difference between a working endpoint and an outage. And nothing in the code looks wrong.
+The second version loads the entire table across the network and filters it in your process. On ten million rows that's the difference between a working endpoint and an outage, and nothing in the code looks wrong.
 
-The switch is thrown by anything that changes the static type to `IEnumerable<T>`: an explicit `.AsEnumerable()` or `.ToList()`, a `foreach`, or — most insidiously — a repository method typed to return `IEnumerable<T>`. Once that happens, every operator downstream runs in memory, and there is no warning.
+![The same Where lambda on two static types. On IQueryable it becomes an expression tree that EF translates, so the database runs WHERE IsActive = 1 and only matching rows cross the network. On IEnumerable it becomes a compiled delegate, so the database sends every row and the filter runs in the application process](queryable-vs-enumerable.svg)
+
+The switch is thrown by anything that leaves you holding something other than an `IQueryable<T>`: an explicit `.AsEnumerable()`, a `.ToList()` followed by more operators, or (most insidiously) a repository method typed to return `IEnumerable<T>`. From there every operator runs in memory, with no warning.
 
 The other way to trip it is calling something EF can't translate:
 
@@ -76,15 +77,13 @@ The other way to trip it is calling something EF can't translate:
 _db.Users.Where(u => MyHelper.IsEligible(u))    // no SQL for this
 ```
 
-EF Core 3.0 and later throw `InvalidOperationException` rather than silently falling back to client evaluation.[^ef-clienteval] This was a breaking change that caused a lot of grumbling and was absolutely the right decision — the old behaviour turned a translation failure into a silent full-table download. Note the one place client evaluation is still allowed: the top-level projection. You can call arbitrary C# in a final `Select`, because by then the rows have already been fetched.
+EF Core 3.0 and later throw `InvalidOperationException` rather than silently falling back to client evaluation.[^ef-clienteval] That breaking change was the right call: the old behaviour turned a translation failure into a silent full-table download. The one place client evaluation is still allowed is the top-level projection, where you can call arbitrary C# in a final `Select` because the rows have already been fetched.
 
 ## Expression trees, briefly
 
 An `Expression<Func<T, bool>>` is a tree of nodes. `u => u.Age > 18` becomes a `LambdaExpression` whose body is a `BinaryExpression` of type `GreaterThan`, with a `MemberExpression` (`u.Age`) on the left and a `ConstantExpression` (`18`) on the right.
 
-That's what makes provider translation possible: EF walks the tree and emits `[Age] > 18`. It's also what makes the closed set of translatable operations unavoidable — a provider can only translate nodes it recognises, so arbitrary method calls have nowhere to go.
-
-You can build them yourself, which is how dynamic filtering and sorting get implemented without string concatenation:
+EF walks the tree and emits `[Age] > 18`. It's also why the set of translatable operations is closed: a provider can only translate methods it has a SQL mapping for, so your own helpers have nowhere to go. Composing `Where` calls is how dynamic filtering works without string concatenation:
 
 ```csharp
 // Compose predicates conditionally — still fully translatable
@@ -94,7 +93,7 @@ if (minAge is int age) q = q.Where(u => u.Age >= age);
 var results = await q.ToListAsync();
 ```
 
-Because nothing executes until `ToListAsync`, this produces one SQL statement with exactly the predicates that applied. This is the correct pattern for dynamic queries, and it beats a string-built `WHERE` clause on both safety and readability.
+Because nothing executes until `ToListAsync`, this produces one SQL statement with exactly the predicates that applied, which beats a string-built `WHERE` clause on safety and readability.
 
 ## Select vs SelectMany
 
@@ -118,21 +117,19 @@ Four methods encoding two independent questions: *may it be missing?* and *may t
 | `Single` | throws | value | throws |
 | `SingleOrDefault` | `default` | value | throws |
 
-The choice is a documentation decision as much as a behavioural one. `Single` says "this is unique and I want to know loudly if that's ever false." `First` says "there may be several and I only care about one" — which is why `First` without an `OrderBy` is a smell: without ordering, "first" is whatever the database felt like returning.
+The choice documents intent as much as behaviour. `Single` says "this is unique and I want to know loudly if that's ever false." `First` says "there may be several and I only care about one" — which is why `First` without an `OrderBy` is a smell: without ordering, "first" is whatever the database felt like returning.
 
-There's a performance asymmetry too. `First` can stop at the first match; `Single` must look for a second one in order to prove uniqueness, so it necessarily fetches one row more than it needs. Don't reach for `Single` on a large unindexed column as a way of being careful — the extra row is cheap, but the scan that finds it may not be.
+There's a performance asymmetry too: `Single` must look for a second match to prove uniqueness, so on an unindexed column, proving there's no second row can mean scanning the whole table.
 
 ## The cost of ToList
 
-`.ToList()` allocates a `List<T>` and fills it, which means it always costs the enumeration plus the allocation. Three specific consequences:
+`.ToList()` costs the enumeration plus the allocation, with three consequences:
 
 **It ends streaming.** Everything is in memory at once. Fine for a page of results, ruinous for a full table.
 
-**It ends SQL translation.** `.ToList().Where(...)` filters in memory over everything you just loaded. `.Where(...).ToList()` filters in the database. The order of these two calls is the whole ballgame.
+**It ends SQL translation.** `.ToList().Where(...)` filters in memory over everything you just loaded. `.Where(...).ToList()` filters in the database.
 
-**It forces the round trip early**, which is sometimes exactly what you want — to release a `DbContext`, to make the timing explicit, or to stop a lazy query from executing in a `finally` block or a serializer.
-
-`ToList` isn't a performance problem. `ToList` in the wrong place is.
+**It forces the round trip early**, which is sometimes exactly what you want: to release a `DbContext`, make the timing explicit, or stop a lazy query executing in a `finally` block or a serializer. `ToList` isn't a performance problem; `ToList` in the wrong place is.
 
 ## Tracking
 
@@ -144,11 +141,11 @@ For a read-only query, it's pure waste:
 var users = await _db.Users.AsNoTracking().ToListAsync();
 ```
 
-The documentation puts it plainly: no-tracking queries "are generally quicker to execute because there's no need to set up the change tracking information".[^ef-tracking] How much quicker depends entirely on the entity count and shape — I'd distrust anyone quoting you a fixed percentage, this post included. Measure it on your own query. The point is that for a read-only endpoint the saving is free, because you were never going to call `SaveChanges` anyway.
+The documentation puts it plainly: no-tracking queries "are generally quicker to execute because there's no need to set up the change tracking information".[^ef-tracking] How much quicker depends on the entity count and shape, so measure it on your own query; the point is that for a read-only endpoint the saving is free.
 
-Tracking also has a correctness dimension people meet by accident: within one `DbContext`, "EF Core checks if the entity is already in the context. If EF Core finds an existing entity, then the same instance is returned",[^ef-tracking] and it does not overwrite that instance's values with the ones just read from the database. This is identity resolution, and it means a second query won't show you changes another process made if you already have that row loaded.
+Tracking also has a correctness dimension people meet by accident: within one `DbContext`, "EF Core checks if the entity is already in the context. If EF Core finds an existing entity, then the same instance is returned",[^ef-tracking] and it does not overwrite that instance's values with the ones just read from the database. This is identity resolution: a second query won't show you changes another process made if you already have that row loaded.
 
-`AsNoTracking` sidesteps it by never consulting the tracker — which has its own consequence worth knowing: a no-tracking query returns "a new instance of the entity even when the same entity is contained in the result multiple times".[^ef-tracking] If you need deduplicated instances without tracking, `AsNoTrackingWithIdentityResolution()` gives you both.
+`AsNoTracking` never consults the tracker, which has its own consequence: a no-tracking query returns "a new instance of the entity even when the same entity is contained in the result multiple times".[^ef-tracking] If you need deduplicated instances without tracking, `AsNoTrackingWithIdentityResolution()` deduplicates them without tracking them in the context.
 
 Use tracking when you intend to modify and save. Use `AsNoTracking` for everything else, which in a typical API is most queries.
 
@@ -163,9 +160,9 @@ foreach (var order in orders)
     Console.WriteLine(order.Customer.Name);        // N queries, one per order
 ```
 
-Each `order.Customer` access triggers a separate database round trip. A thousand orders means a thousand-and-one queries. Each is individually fast — a few milliseconds — which is exactly why it hides: nothing is slow, there's just an enormous number of them, and the total is dominated by network latency rather than database work.
+With lazy loading on, each `order.Customer` access is a separate round trip: a thousand orders, up to a thousand-and-one queries. Each is fast, which is why it hides; the total is dominated by network latency rather than database work.
 
-EF Core disables lazy loading by default, which turns most of these into a `NullReferenceException` at development time instead of a performance disaster in production — a good trade. But lazy loading is easy to switch on (`UseLazyLoadingProxies`), and the pattern reappears whenever a loop touches a navigation property.
+EF Core disables lazy loading by default, which turns most of these into a `NullReferenceException` in development instead of a performance disaster in production. But lazy loading is easy to switch on (`UseLazyLoadingProxies`), and the same shape reappears whenever a loop issues a query per item.
 
 The fixes:
 
@@ -179,40 +176,40 @@ await _db.Orders
     .ToListAsync();
 ```
 
-Detecting it is largely a matter of *looking at the SQL*, which brings us to the main event.
+Detecting it is largely a matter of *looking at the SQL*.
 
 ### Include has its own trap
 
-`Include` on a collection navigation produces a JOIN, and a JOIN duplicates the parent row once per child. Load 100 orders each with 50 items and one JOIN returns 5,000 rows, with all the order columns repeated 50 times each. Stack two collection `Include`s and you get a cartesian product — 100 × 50 × 20 rows for data you could have fetched in three queries.
+`Include` on a collection navigation produces a JOIN, which repeats the parent row once per child: 100 orders with 50 items each come back as 5,000 rows. Add a second collection `Include`, say 20 payments per order, and you get a cartesian product: 100 × 50 × 20 = 100,000 rows for data three queries could fetch as 7,100.
 
-This is bad enough that EF Core 5.0 added `AsSplitQuery()`, which issues one query per collection navigation and stitches the results together in memory.[^ef-splitquery] Trading one round trip for three is usually the right call when the alternative is an order of magnitude more rows over the wire. The tradeoff the docs are careful about: split queries aren't executed in a single transaction by default, so the data can shift between them.
+![Two collection Includes on 100 orders. As one query, the JOIN returns 100 × 50 × 20 = 100,000 rows, each repeating the order's columns. As a split query, EF sends three queries returning 100 orders, 5,000 items and 2,000 payments, 7,100 rows in all, and stitches them together in memory](include-explosion.svg)
+
+EF Core 5.0 added `AsSplitQuery()` for this: one query per collection navigation, stitched together in memory.[^ef-splitquery] Three round trips usually beat an order of magnitude more rows over the wire. The tradeoff: split queries aren't executed in a single transaction by default, so the data can shift between them.
 
 Projection avoids the whole issue: select the shape you actually need and EF generates SQL that returns exactly that.
 
 ## Fifty thousand rows in fifteen seconds
 
-Here's the scenario worth working through properly, because the instinct — "add an index" — is usually wrong, and the actual answer is almost always "return less data."
+An endpoint returns 50,000 records and takes 15 seconds. The instinct, "add an index", is usually wrong, and the answer is almost always "return less data".
 
-An endpoint returns 50,000 records and takes 15 seconds. How do you investigate?
+**Start by finding where the time goes.** Fifteen seconds can sit in query execution, transferring rows, materialising entities, serialising JSON, or something unrelated like a synchronous call mid-pipeline. Log the timings and split the budget before touching anything.
 
-**Start by finding where the time goes.** Fifteen seconds is a budget to be accounted for, and it can sit in any of: query execution in the database, transferring rows over the network, materialising entities in EF, serialising to JSON, or something entirely unrelated like a synchronous call in the middle of the pipeline. Guessing wastes the most time. Log the timings and split the budget before touching anything.
+**Look at the generated SQL.** Not the LINQ — the SQL. EF Core logs the commands it executes at `Information` level under the `Database.Command` category, so raising that in development is usually enough;[^ef-logging] add `EnableSensitiveDataLogging` if you also need the parameter *values* (and note the name is a warning — it will put user data in your logs). Or attach a profiler. This is where you discover the query that ran isn't the one you thought you wrote: an accidental client evaluation, a cartesian explosion, or a thousand small queries where you expected one. Many "slow EF query" investigations end here.
 
-**Look at the generated SQL.** Not the LINQ — the SQL. EF Core logs the commands it executes at `Information` level under the `Database.Command` category, so raising that in development is usually enough;[^ef-logging] add `EnableSensitiveDataLogging` if you also need the parameter *values* (and note the name is a warning — it will put user data in your logs). Or attach a profiler. This is where you discover the query you thought you wrote isn't the query being run: an accidental client evaluation, a cartesian explosion from stacked `Include`s, or a thousand small queries where you expected one. A large fraction of "slow EF query" investigations end here.
+**Get the execution plan** for that SQL from the database. It tells you whether the database is the problem: a scan where you expected a seek, a missing index on a foreign key or filter column, a bad join order, stale statistics. If the plan is clean and the query runs in 200 ms in a SQL client, no index will help.
 
-**Get the execution plan** for that SQL, from the database, not from EF. This tells you whether the database itself is the problem: a table scan where you expected a seek, a missing index on a foreign key or a filter column, a bad join order, or stale statistics. If the plan is clean and the query runs in 200ms in a SQL client, the database isn't your problem and no index will help.
+**Then ask the real question: why 50,000 rows?**
 
-**Then ask the real question: why 50,000 rows?** This is almost always where the answer lives, and everything above is just proving it.
-
-- **Does the caller need them all?** Almost certainly not. Nobody renders 50,000 rows. If it's a UI, paginate — `Skip`/`Take`, or better, keyset pagination (`WHERE Id > @last ORDER BY Id`), which doesn't degrade as the offset grows the way `OFFSET` does. If it's an export, stream it with `IAsyncEnumerable` and write to the response as you go instead of buffering the lot.
-- **Do you need every column?** `SELECT *` over a table with a couple of `nvarchar(max)` columns moves an enormous amount of data you're not using. Projecting to a DTO with the six fields the client renders can cut transfer by an order of magnitude on its own.
-- **Are you tracking them?** 50,000 tracked entities means 50,000 snapshots. `AsNoTracking` on a read-only endpoint is free.
+- **Does the caller need them all?** Almost certainly not; nobody renders 50,000 rows. If it's a UI, paginate — `Skip`/`Take`, or better, keyset pagination (`WHERE Id > @last ORDER BY Id`), which doesn't degrade as the offset grows the way `OFFSET` does. If it's an export, stream it with `IAsyncEnumerable` (no-tracking, or the change tracker holds every row anyway) and write to the response as you go.
+- **Do you need every column?** `SELECT *` over a table with a couple of `nvarchar(max)` columns moves a lot of data you're not using. Projecting to a DTO with the six fields the client renders can cut transfer by an order of magnitude.
+- **Are you tracking them?** 50,000 tracked entities means 50,000 snapshots.
 - **Are you loading a graph?** Check for `Include`s pulling collections and multiplying the row count.
 
-**Then serialisation.** 50,000 objects to JSON is real work and real allocation. If the payload is genuinely required, `System.Text.Json` with source generation avoids the reflection cost, and streaming directly to the response body avoids buffering the whole document in memory. But this only matters once the row count is justified — optimising the serialisation of data you shouldn't be sending is solving the wrong problem.
+**Then serialisation.** If the payload is genuinely required, `System.Text.Json` source generation avoids the reflection cost and streaming to the response body avoids buffering the whole document. But optimising the serialisation of data you shouldn't be sending is solving the wrong problem.
 
-**And allocations.** 50,000 entities plus 50,000 DTOs plus a JSON buffer is enough to push large arrays onto the Large Object Heap and trigger Gen 2 collections mid-request. That shows up as latency that gets *worse* under concurrent load, which is a useful signature.
+**And allocations.** 50,000 entities plus 50,000 DTOs plus a JSON buffer is enough to push large arrays onto the Large Object Heap and trigger Gen 2 collections mid-request, which shows up as latency that gets *worse* under concurrent load.
 
-The order matters: measure, read the SQL, get the plan, then attack the row count and the column count. Nine times out of ten the fix is pagination plus projection plus `AsNoTracking`, and the index everyone reached for first was never the bottleneck.
+So: measure, read the SQL, get the plan, then attack the row and column counts. Usually the fix is pagination plus projection plus `AsNoTracking`, and the index everyone reached for first was never the bottleneck.
 
 ## A worked projection
 
@@ -231,32 +228,29 @@ var totals = orders
     .ToDictionary(g => g.Key, g => g.Sum(o => o.Items.Sum(i => i.Price * i.Quantity)));
 ```
 
-This loads every order, every line item, and every customer into memory — with the order columns duplicated once per item by the JOIN — to produce one decimal per customer. The aggregation happens in C# over data that never needed to leave the database.
+This loads every order, line item and customer into memory, with the order columns repeated per item by the JOIN, to produce one decimal per customer.
 
 ```csharp
 var totals = await _db.Orders
-    .GroupBy(o => o.CustomerId)
-    .Select(g => new
-    {
-        CustomerId = g.Key,
-        Total = g.Sum(o => o.Items.Sum(i => i.Price * i.Quantity))
-    })
+    .SelectMany(o => o.Items, (o, i) => new { o.CustomerId, Amount = i.Price * i.Quantity })
+    .GroupBy(x => x.CustomerId)
+    .Select(g => new { CustomerId = g.Key, Total = g.Sum(x => x.Amount) })
     .ToDictionaryAsync(x => x.CustomerId, x => x.Total);
 ```
 
-One SQL statement with a `GROUP BY` and a `SUM`, returning one row per customer. The database is very good at this; it's what it's for.
+Flattening to order lines first keeps the shape simple enough for EF to translate: one SQL statement with a JOIN, a `GROUP BY` and a `SUM`, returning one row per customer (customers with no orders are absent, so read it with `TryGetValue`).
 
-The general principle: **push aggregation down to the database, and pull back the smallest shape that answers the question.** Most EF performance work is applications of that one sentence.
+The general principle: **push aggregation down to the database, and pull back the smallest shape that answers the question.** Most EF performance work applies that one sentence.
 
 ## Transactions and SaveChanges
 
 `SaveChanges` walks the change tracker, works out the INSERT/UPDATE/DELETE statements needed, orders them to respect foreign keys, and executes them **inside an implicit transaction**. One `SaveChanges` is atomic — all of it commits or none of it does.[^ef-transactions]
 
-That's the detail worth internalising, because it determines where your transaction boundaries should go. If your unit of work is a single `SaveChanges`, you already have atomicity and don't need an explicit transaction. You need `BeginTransaction` when you must span multiple `SaveChanges` calls, or combine EF work with raw SQL.
+That decides where your transaction boundaries go. If your unit of work is a single `SaveChanges`, you already have atomicity. You need `BeginTransaction` to span multiple `SaveChanges` calls, or to combine them with raw SQL or the set-based `ExecuteUpdateAsync`/`ExecuteDeleteAsync`, which run immediately as their own statements, outside the change tracker and any `SaveChanges` transaction, so a later `SaveChanges` of tracked entities can overwrite what they wrote.[^ef-executeupdate]
 
 ### Optimistic vs pessimistic concurrency
 
-**Pessimistic** locks the row up front so nobody else can touch it. Correct, and it doesn't scale — it holds database locks across your application's think-time.
+**Pessimistic** locks the row up front so nobody else can touch it. Correct, and it doesn't scale: it holds database locks across your application's think-time.
 
 **Optimistic** doesn't lock. It detects, at write time, that someone else changed the row since you read it, and fails. The mechanism is a **concurrency token** — typically a `rowversion`/`timestamp` column:
 
@@ -273,11 +267,11 @@ public class Product
 
 EF includes the token in the `WHERE` clause of the UPDATE: `WHERE Id = 5 AND RowVersion = 0x...`. If another transaction changed the row, the version no longer matches, zero rows are affected, and EF throws `DbUpdateConcurrencyException`.[^ef-concurrency] Without a token, that write is a silent last-writer-wins — the classic lost update.
 
-Handling the exception means deciding a policy: reload and retry, surface the conflict to the user, or merge. There is no generic right answer, which is why EF makes you write it.
+Handling the exception means choosing a policy (reload and retry, surface the conflict, or merge), which is why EF makes you write it.
 
 ### DbContext lifetime
 
-`DbContext` is **not thread-safe**, and this is not a soft warning. EF Core detects the overlap and throws an `InvalidOperationException` reporting that "a second operation was started on this context instance before a previous operation completed" — the message goes on to name the cause as different threads sharing one instance.[^ef-dbcontext] Where it isn't detected, you get change-tracker corruption instead, which is worse because it's silent.
+`DbContext` is **not thread-safe**. EF Core detects the overlap and throws an `InvalidOperationException` reporting that "a second operation was started on this context instance before a previous operation completed" — the message goes on to name the cause as different threads sharing one instance.[^ef-dbcontext] Where it isn't detected, you get change-tracker corruption instead, which is worse because it's silent.
 
 It's designed to be short-lived: one per unit of work, which in a web app means one per request. `AddDbContext` registers it as **scoped** by default, which gives you exactly that.[^ef-dbcontext-lifetime]
 
@@ -296,9 +290,9 @@ The other way to break it is to inject a `DbContext` into a singleton — which 
 
 ## What to take from this
 
-LINQ's uniformity is a genuine achievement and the source of most of its hazards: the same expression means "filter a list" or "generate SQL" depending on a static type you can't see at the call site.
+LINQ's uniformity is the source of most of its hazards: the same expression means "filter a list" or "generate SQL" depending on a static type you can't see at the call site.
 
-Two habits cover most of it. Know whether you're holding an `IQueryable` or an `IEnumerable` at every point in a chain. And when something's slow, read the SQL before you theorise — the gap between the query you wrote and the query that ran is where the time usually is.
+Two habits cover most of it. Know whether you're holding an `IQueryable` or an `IEnumerable` at every point in a chain. And when something's slow, read the SQL before you theorise: the gap between the query you wrote and the query that ran is usually where the time is.
 
 Next: [memory, GC, and allocation]({{< relref "memory-gc-and-allocation.md" >}}) — including why a garbage-collected service still runs out of memory.
 
@@ -309,4 +303,5 @@ Next: [memory, GC, and allocation]({{< relref "memory-gc-and-allocation.md" >}})
 [^ef-dbcontext]: Microsoft, ["DbContext Lifetime, Configuration, and Initialization"](https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/) — `DbContext` is not thread-safe, and the exception raised when operations overlap.
 [^ef-dbcontext-lifetime]: Microsoft, ["DbContext Lifetime, Configuration, and Initialization"](https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/) — `AddDbContext` registers the context as a scoped service by default; `IDbContextFactory` for other lifetimes.
 [^ef-concurrency]: Microsoft, ["Handling Concurrency Conflicts"](https://learn.microsoft.com/en-us/ef/core/saving/concurrency) — concurrency tokens in the `WHERE` clause, and `DbUpdateConcurrencyException` when no rows match.
+[^ef-executeupdate]: Microsoft, ["ExecuteUpdate and ExecuteDelete"](https://learn.microsoft.com/en-us/ef/core/saving/execute-insert-update-delete) — they "take effect immediately", are "completely unaware of EF's change tracker", and don't implicitly start a transaction.
 [^ef-transactions]: Microsoft, ["Using Transactions"](https://learn.microsoft.com/en-us/ef/core/saving/transactions) — a single `SaveChanges` is applied in a transaction.
