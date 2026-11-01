@@ -1,18 +1,15 @@
 ---
 title: ".NET Deep Dives"
 date: 2026-08-10T10:00:00+02:00
+lastmod: 2026-11-01T13:48:00+02:00
 draft: false
 tags: ["software", "csharp", "dotnet", "dotnet-deep-dives", "ai-generated"]
 description: "A six-part series on the parts of C# and .NET where correct-looking code behaves badly — async, EF Core, memory, DI, and failure design."
 ---
 
-C# is a language you can be productive in long before you understand it. That's mostly a compliment. The cost is a category of bug that doesn't look like a bug: code that reads correctly, passes review, works in development, and behaves badly under concurrency, load, or partial failure.
+C# is a language you can be productive in long before you understand it. The cost is a category of bug that doesn't look like a bug: code that reads correctly, passes review, works in development, and behaves badly under concurrency, load, or partial failure.
 
-This series is about that category. Six posts, each on an area where the gap between what the code says and what the runtime does is wide enough to fall into.
-
-The organising question throughout is **what does this actually turn into** — how many round trips, how many allocations, which thread, and what happens when it fails halfway through. Every measured claim came out of a scratch project rather than memory, and where something surprised me I've said so.
-
-Because these posts are AI-written, the specific claims in them are footnoted against Microsoft's .NET documentation — thresholds, defaults, version-introduced behaviour, and API guarantees all cite the page they came from. That pass was worth doing for its own sake: it caught several things the first drafts got wrong, including a confident and completely incorrect claim about how far `HybridCache`'s stampede protection reaches. Where a claim couldn't be sourced, it has been softened or removed rather than left to sound authoritative. Treat an uncited number as an opinion.
+This series is six posts on areas where the gap between what the code says and what the runtime does is wide enough to fall into. The organising question throughout is **what does this actually turn into**: how many round trips, how many allocations, which thread, and what happens when it fails halfway through. Measured claims come from a scratch project rather than memory.
 
 ## The posts
 
@@ -30,10 +27,8 @@ Because these posts are AI-written, the specific claims in them are footnoted ag
 
 ## A recurring theme
 
-Reading them back, the same idea shows up in three separate places under three names.
+The same idea shows up in three places under three names.
 
 The cache stampede is solved by pushing atomicity down to `Lazy<Task<T>>` rather than coordinating callers with locks. Idempotency is solved by pushing atomicity down to a unique constraint rather than checking for duplicates in application code. Both are the same move: **a check followed by an act is a race, and the fix is to find the layer that can do both at once.**
 
-The third is EF's `GroupBy` — push the aggregation down to the database rather than pulling rows up to aggregate them. Different problem, same instinct: do the work at the layer that's built for it, rather than reimplementing it one level up with less information.
-
-If there's a single thing worth taking from the series, it's probably that.
+The third is EF's `GroupBy`: push the aggregation down to the database rather than pulling rows up to aggregate them. Different problem, same instinct: do the work at the layer that's built for it, rather than reimplementing it one level up with less information.
