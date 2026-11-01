@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" role="img" aria-labelledby="t">
+  <title id="t">Assignment copies what the variable holds. Value type: s1 and s2 each hold their own PointStruct, so setting s2.X to 99 leaves s1.X at 1. Reference type: c1 and c2 each hold a reference to the same PointClass object on the heap, so setting c2.X to 99 is visible through c1</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .dash { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+  </defs>
+  <rect width="760" height="300" fill="#08111f"/>
+
+  <!-- Value type panel -->
+  <text x="40" y="36">struct: var s2 = s1;</text>
+  <text class="muted" x="40" y="56">each variable holds its own value</text>
+
+  <text x="40" y="112">s1</text>
+  <rect class="box" x="80" y="88" width="200" height="40" rx="6"/>
+  <text x="180" y="113" text-anchor="middle">PointStruct X = 1</text>
+
+  <text x="40" y="182">s2</text>
+  <rect class="hl" x="80" y="158" width="200" height="40" rx="6"/>
+  <text x="180" y="183" text-anchor="middle">PointStruct X = 99</text>
+
+  <text class="muted" x="40" y="236">s2.X = 99 changed only s2's copy</text>
+
+  <line class="dash" x1="360" y1="24" x2="360" y2="276"/>
+
+  <!-- Reference type panel -->
+  <text x="400" y="36">class: var c2 = c1;</text>
+  <text class="muted" x="400" y="56">both variables hold a reference</text>
+
+  <text x="400" y="112">c1</text>
+  <rect class="box" x="436" y="88" width="72" height="40" rx="6"/>
+  <text x="472" y="113" text-anchor="middle">ref</text>
+
+  <text x="400" y="182">c2</text>
+  <rect class="box" x="436" y="158" width="72" height="40" rx="6"/>
+  <text x="472" y="183" text-anchor="middle">ref</text>
+
+  <path class="ptr" d="M508 108 H560 V128 H586" marker-end="url(#a)"/>
+  <path class="ptr" d="M508 178 H560 V158 H586" marker-end="url(#a)"/>
+
+  <rect class="hl" x="590" y="118" width="140" height="50" rx="6"/>
+  <text x="660" y="139" text-anchor="middle">PointClass</text>
+  <text x="660" y="158" text-anchor="middle">X = 99</text>
+  <text class="muted" x="660" y="188" text-anchor="middle">one object, heap</text>
+
+  <text class="muted" x="400" y="236">c2.X = 99 is visible through c1</text>
+</svg>
