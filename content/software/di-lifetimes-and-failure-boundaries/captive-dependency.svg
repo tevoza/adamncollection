@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" role="img" aria-labelledby="t">
+  <title id="t">Lifetimes on a timeline. The singleton and the root container live for the whole application. Each HTTP request gets its own scope with its own DbContext, disposed when the request ends. A DbContext injected into the singleton is resolved from the root instead, so one context outlives every request and is shared by all of them</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .bad { fill: #fca5a5; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .badbox { fill: #2a1620; stroke: #f87171; stroke-width: 1.5; }
+    .badptr { fill: none; stroke: #f87171; stroke-width: 1.75; stroke-dasharray: 5 4; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+  </style>
+  <defs>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f87171"/>
+    </marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+  </defs>
+  <rect width="800" height="300" fill="#08111f"/>
+
+  <text x="20" y="75">app</text>
+  <rect class="hl" x="140" y="50" width="640" height="40" rx="6"/>
+  <text x="460" y="75" text-anchor="middle">singleton and root container: the whole app</text>
+
+  <text x="20" y="157">requests</text>
+  <rect class="box" x="170" y="130" width="190" height="48" rx="6"/>
+  <text x="265" y="150" text-anchor="middle">request 1 scope</text>
+  <text class="muted" x="265" y="168" text-anchor="middle">own DbContext</text>
+  <rect class="box" x="380" y="130" width="190" height="48" rx="6"/>
+  <text x="475" y="150" text-anchor="middle">request 2 scope</text>
+  <text class="muted" x="475" y="168" text-anchor="middle">own DbContext</text>
+  <rect class="box" x="590" y="130" width="190" height="48" rx="6"/>
+  <text x="685" y="150" text-anchor="middle">request 3 scope</text>
+  <text class="muted" x="685" y="168" text-anchor="middle">own DbContext</text>
+  <text class="muted" x="475" y="196" text-anchor="middle">each disposed when its request ends</text>
+
+  <text x="20" y="237">captive</text>
+  <rect class="badbox" x="140" y="212" width="640" height="48" rx="6"/>
+  <text x="460" y="232" text-anchor="middle">DbContext injected into the singleton</text>
+  <text class="bad" x="460" y="250" text-anchor="middle">resolved from the root: shared by every request, never disposed</text>
+  <path class="badptr" d="M152 90 V208" marker-end="url(#r)"/>
+
+  <path class="dir" d="M140 284 H776" marker-end="url(#m)"/>
+  <text class="muted" x="20" y="288">time</text>
+</svg>
