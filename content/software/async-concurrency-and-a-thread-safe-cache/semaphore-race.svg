@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320" role="img" aria-labelledby="t">
+  <title id="t">Three callers against one key over time. A acquires semaphore 1 and B waits on the same semaphore 1. A releases and removes the dictionary entry. C then finds no entry, creates semaphore 2 and enters at once, while B is released from semaphore 1 and also enters: two callers are inside the critical section together</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .bad { fill: #fca5a5; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .badbox { fill: #2a1620; stroke: #f87171; stroke-width: 1.5; }
+    .zone { fill: none; stroke: #f87171; stroke-width: 1.5; stroke-dasharray: 5 4; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+  </style>
+  <defs>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+  </defs>
+  <rect width="800" height="320" fill="#08111f"/>
+
+  <text x="40" y="85">A</text>
+  <rect class="hl" x="120" y="60" width="210" height="40" rx="6"/>
+  <text x="225" y="85" text-anchor="middle">holds sem 1</text>
+  <text class="muted" x="340" y="85">releases, removes entry</text>
+
+  <text x="40" y="155">B</text>
+  <rect class="box" x="160" y="130" width="170" height="40" rx="6"/>
+  <text x="245" y="155" text-anchor="middle">waits on sem 1</text>
+  <rect class="badbox" x="340" y="130" width="360" height="40" rx="6"/>
+  <text x="415" y="155" text-anchor="middle">enters (sem 1)</text>
+
+  <text x="40" y="225">C</text>
+  <text class="muted" x="370" y="225">creates sem 2</text>
+  <rect class="badbox" x="490" y="200" width="210" height="40" rx="6"/>
+  <text x="595" y="225" text-anchor="middle">enters (sem 2)</text>
+
+  <rect class="zone" x="484" y="122" width="222" height="126" rx="8"/>
+  <text class="bad" x="595" y="266" text-anchor="middle">both in the critical section</text>
+
+  <path class="dir" d="M120 296 H756" marker-end="url(#m)"/>
+  <text class="muted" x="756" y="286" text-anchor="end">time</text>
+</svg>

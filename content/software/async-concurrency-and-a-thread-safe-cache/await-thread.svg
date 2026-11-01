@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" role="img" aria-labelledby="t">
+  <title id="t">One request on a timeline. Thread 7 runs GetUserAsync until await QueryAsync, then returns to the thread pool and serves other requests while the database works; no thread waits on the query. When the I/O completes, the continuation runs MoveNext on whichever pool thread is free, here thread 12, which runs Map and returns</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .inner { fill: #0d1829; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+  </defs>
+  <rect width="800" height="300" fill="#08111f"/>
+
+  <text x="20" y="87">thread 7</text>
+  <rect class="hl" x="140" y="60" width="200" height="44" rx="6"/>
+  <text x="240" y="80" text-anchor="middle">GetUserAsync</text>
+  <text class="muted" x="240" y="96" text-anchor="middle">runs until await</text>
+  <rect class="inner" x="350" y="60" width="410" height="44" rx="6"/>
+  <text class="muted" x="555" y="86" text-anchor="middle">back in the pool, serving other requests</text>
+
+  <text x="20" y="157">database</text>
+  <rect class="box" x="330" y="130" width="250" height="44" rx="6"/>
+  <text x="455" y="150" text-anchor="middle">QueryAsync in flight</text>
+  <text class="muted" x="455" y="166" text-anchor="middle">no thread waits on it</text>
+
+  <text x="20" y="227">thread 12</text>
+  <rect class="hl" x="560" y="200" width="200" height="44" rx="6"/>
+  <text x="660" y="220" text-anchor="middle">MoveNext()</text>
+  <text class="muted" x="660" y="236" text-anchor="middle">Map(row), return</text>
+
+  <path class="ptr" d="M335 104 V126" marker-end="url(#a)"/>
+  <path class="ptr" d="M570 174 V196" marker-end="url(#a)"/>
+
+  <text class="muted" x="400" y="282" text-anchor="middle">at the await, the caller gets back an incomplete Task</text>
+</svg>
