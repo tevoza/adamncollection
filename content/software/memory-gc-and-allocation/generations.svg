@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 290" role="img" aria-labelledby="t">
+  <title id="t">The managed heap by generation. New objects are allocated in Gen 0, which is collected often and cheaply; most die there. Survivors are promoted to Gen 1, then to Gen 2, which is collected rarely and walks the whole heap. Objects of 85,000 bytes or more go straight to the Large Object Heap, which is collected only with Gen 2 and swept rather than compacted</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+    .dash { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+  </defs>
+  <rect width="800" height="290" fill="#08111f"/>
+
+  <text class="muted" x="140" y="24" text-anchor="middle">new objects</text>
+  <path class="ptr" d="M140 32 V66" marker-end="url(#a)"/>
+
+  <rect class="hl" x="40" y="70" width="200" height="70" rx="6"/>
+  <text x="140" y="100" text-anchor="middle">Gen 0</text>
+  <text class="muted" x="140" y="122" text-anchor="middle">frequent, cheap</text>
+  <text class="muted" x="140" y="162" text-anchor="middle">most objects die here</text>
+
+  <path class="dir" d="M240 105 H296" marker-end="url(#m)"/>
+  <text class="muted" x="270" y="96" text-anchor="middle">promote</text>
+
+  <rect class="box" x="300" y="70" width="200" height="70" rx="6"/>
+  <text x="400" y="100" text-anchor="middle">Gen 1</text>
+  <text class="muted" x="400" y="122" text-anchor="middle">survived one GC</text>
+
+  <path class="dir" d="M500 105 H556" marker-end="url(#m)"/>
+  <text class="muted" x="530" y="96" text-anchor="middle">promote</text>
+
+  <rect class="box" x="560" y="70" width="200" height="70" rx="6"/>
+  <text x="660" y="100" text-anchor="middle">Gen 2</text>
+  <text class="muted" x="660" y="122" text-anchor="middle">rare, walks whole heap</text>
+
+  <line class="dash" x1="660" y1="140" x2="660" y2="200"/>
+  <text class="muted" x="650" y="176" text-anchor="end">collected together</text>
+
+  <text x="40" y="237">allocations ≥ 85,000 bytes</text>
+  <path class="ptr" d="M266 232 H556" marker-end="url(#a)"/>
+  <rect class="box" x="560" y="200" width="200" height="64" rx="6"/>
+  <text x="660" y="226" text-anchor="middle">Large Object Heap</text>
+  <text class="muted" x="660" y="248" text-anchor="middle">swept, not compacted</text>
+</svg>
