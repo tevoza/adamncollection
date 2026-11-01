@@ -180,6 +180,13 @@ blockquote {
   max-width: var(--measure);
 }
 
+/* Code lines don't wrap, so the prose measure cut most of them off behind a
+   horizontal scroll. Let code blocks use the full width of the post card. */
+.post-content > .highlight,
+.post-content > pre {
+  max-width: none;
+}
+
 .eyebrow,
 .post-meta {
   margin: 0 0 0.75rem;
