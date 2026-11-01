@@ -3,7 +3,7 @@
   <style>
     text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 12.5px; }
     .h { font-size: 15px; }
-    .muted { fill: #9baeca; font-size: 11.5px; }
+    .muted { fill: #9baeca; font-size: 12px; }
     .page { fill: none; stroke: #c084fc; stroke-width: 1.75; stroke-dasharray: 6 3; }
     .cell { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.25; }
     .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
@@ -56,10 +56,10 @@
   <text class="h" x="540" y="24" text-anchor="middle">Column store</text>
 
   <rect class="colhl" x="384" y="50" width="56" height="194" rx="6"/>
-  <rect class="hl" x="390" y="60" width="44" height="36" rx="3"/><text x="412" y="83" text-anchor="middle" style="font-size:11px">10-01</text>
-  <rect class="hl" x="390" y="104" width="44" height="36" rx="3"/><text x="412" y="127" text-anchor="middle" style="font-size:11px">10-01</text>
-  <rect class="hl" x="390" y="148" width="44" height="36" rx="3"/><text x="412" y="171" text-anchor="middle" style="font-size:11px">10-02</text>
-  <rect class="hl" x="390" y="192" width="44" height="36" rx="3"/><text x="412" y="215" text-anchor="middle" style="font-size:11px">10-02</text>
+  <rect class="hl" x="390" y="60" width="44" height="36" rx="3"/><text x="412" y="83" text-anchor="middle" style="font-size:12px">10-01</text>
+  <rect class="hl" x="390" y="104" width="44" height="36" rx="3"/><text x="412" y="127" text-anchor="middle" style="font-size:12px">10-01</text>
+  <rect class="hl" x="390" y="148" width="44" height="36" rx="3"/><text x="412" y="171" text-anchor="middle" style="font-size:12px">10-02</text>
+  <rect class="hl" x="390" y="192" width="44" height="36" rx="3"/><text x="412" y="215" text-anchor="middle" style="font-size:12px">10-02</text>
 
   <rect class="colhl" x="448" y="50" width="56" height="194" rx="6"/>
   <rect class="hl" x="454" y="60" width="44" height="36" rx="3"/><text x="476" y="83" text-anchor="middle">ZA</text>
@@ -75,10 +75,10 @@
     <rect class="cell" x="518" y="192" width="44" height="36" rx="3"/><text x="540" y="215" text-anchor="middle">91</text>
 
     <rect class="col" x="576" y="50" width="56" height="194" rx="6"/>
-    <rect class="cell" x="582" y="60" width="44" height="36" rx="3"/><text x="604" y="83" text-anchor="middle" style="font-size:11px">view</text>
-    <rect class="cell" x="582" y="104" width="44" height="36" rx="3"/><text x="604" y="127" text-anchor="middle" style="font-size:11px">click</text>
-    <rect class="cell" x="582" y="148" width="44" height="36" rx="3"/><text x="604" y="171" text-anchor="middle" style="font-size:11px">view</text>
-    <rect class="cell" x="582" y="192" width="44" height="36" rx="3"/><text x="604" y="215" text-anchor="middle" style="font-size:11px">buy</text>
+    <rect class="cell" x="582" y="60" width="44" height="36" rx="3"/><text x="604" y="83" text-anchor="middle" style="font-size:12px">view</text>
+    <rect class="cell" x="582" y="104" width="44" height="36" rx="3"/><text x="604" y="127" text-anchor="middle" style="font-size:12px">click</text>
+    <rect class="cell" x="582" y="148" width="44" height="36" rx="3"/><text x="604" y="171" text-anchor="middle" style="font-size:12px">view</text>
+    <rect class="cell" x="582" y="192" width="44" height="36" rx="3"/><text x="604" y="215" text-anchor="middle" style="font-size:12px">buy</text>
 
     <rect class="col" x="640" y="50" width="56" height="194" rx="6"/>
     <rect class="cell" x="646" y="60" width="44" height="36" rx="3"/><text x="668" y="83" text-anchor="middle">{…}</text>

@@ -2,7 +2,7 @@
   <title id="t">DynamoDB: the partition key is hashed to choose a partition; items with the same partition key form an item collection sorted by sort key, so a Query reads one contiguous range</title>
   <style>
     text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13px; }
-    .muted { fill: #9baeca; font-size: 11.5px; }
+    .muted { fill: #9baeca; font-size: 12px; }
     .frame { fill: none; stroke: #3a4d6b; stroke-width: 1.5; }
     .framehl { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
     .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }

@@ -6,9 +6,9 @@ tags: ["software", "architecture", "databases", "sql", "nosql", "postgres", "dyn
 description: "Reading a workload's shape and persistence requirements, then picking between relational, document/key-value, columnar, DynamoDB and Cosmos DB — plus how pages, MVCC, the WAL and B-tree indexes actually work underneath."
 ---
 
-"Which database should we use?" is usually asked as a question about products. It's better asked as a question about the data: what shape it has, how it's read, how it's written, what has to be true about it after a crash, and how big it gets. Answer those and the product mostly picks itself. Skip them and you get a database chosen by familiarity, which works right up until the workload stops resembling whatever the team built last.
+"Which database should we use?" is usually asked about products. It's better asked about the data: its shape, how it's read and written, what must survive a crash, and how big it gets. Answer those and the product mostly picks itself. Skip them and you get the database the team used last time, which works until the workload stops resembling the last one.
 
-So this post starts with workloads rather than technologies:
+So this post starts with workloads, and resolves each at the end:
 
 > **A. Orders and payments.** Customers, orders, line items, payments, refunds. Money must balance. Finance wants reports nobody has thought of yet.
 >
@@ -20,157 +20,131 @@ So this post starts with workloads rather than technologies:
 >
 > **E. CMS content.** Articles with wildly varying structure — some have galleries, some have embedded quizzes, some have neither. Read far more than written.
 
-Each of these gets resolved at the end. The middle is the material you need to resolve them, including — because it's where the real trade-offs come from — how a database actually stores data and finds it again.
-
-Like the rest of the software posts, this one is AI-written, so its specific claims — limits, defaults, version-introduced behaviour, and how engines behave on disk — are footnoted against the vendors' own documentation. Where a statement is reasoning built on those sources rather than something they say, the wording says so. Treat an uncited number as an opinion.
-
 ## The questions to ask first
 
-Before naming any technology, these are the questions that decide it:
-
-- **Are the access patterns known in advance, or ad hoc?** If you can list every query the system will ever run, you can design storage around them. If finance will invent new questions next quarter, you need a query planner.
-- **Point lookups or scans?** Fetching one row by key and summing a column across a billion rows are opposite workloads. One storage layout cannot be optimal for both.
-- **What are the relationships?** Data that's naturally a tree (an order and its lines) can live in one document. Data that's a graph of shared entities (products referenced by many orders, customers by many addresses) wants joins.
-- **What must be atomic?** One row, one entity, one customer's data, or arbitrary sets of rows? The scope of a transaction you need is one of the strongest constraints there is.
-- **How consistent must reads be?** Read-your-own-writes? Globally linearizable? Is a second of staleness acceptable?
-- **How big, how fast, and growing how?** Volume, throughput, and whether either grows without bound.
+- **Are access patterns known in advance, or ad hoc?** If you can list every query, you can design storage around them. If finance will invent new ones next quarter, you need a query planner.
+- **Point lookups or scans?** Fetching one row by key and summing a column over a billion rows are opposite workloads; no single layout is optimal for both.
+- **What are the relationships?** A tree (an order and its lines) can live in one document. A graph of shared entities (products in many orders) wants joins.
+- **What must be atomic?** One row, one entity, one customer, or arbitrary rows? Transaction scope is one of the strongest constraints there is.
+- **How consistent must reads be?** Read-your-own-writes? Globally linearizable? Is a second of staleness fine?
+- **How big, how fast, growing how?**
 - **Where are the users?** One region or several, and do writes happen in more than one?
-- **How long does data live?** Forever, until a TTL, or until an archival policy moves it?
-- **What's the cost and operational model?** A server you run, a managed instance you size, or a serverless service billed per request — which changes what "an expensive query" means.
-
-The rest of the post is these questions applied.
+- **How long does data live?** Forever, until a TTL, or until archived?
+- **What's the cost model?** A server you run, a managed instance you size, or per-request billing — which changes what "an expensive query" means.
 
 ## SQL vs NoSQL, and the actual distinction
 
-The popular framing is "schema versus schemaless." That's the least important difference. Every system that stores data has a schema; the question is only whether the database enforces it on write or your code assumes it on read. A document store with no declared schema still has one — it lives in every piece of code that reads a field and expects it to be there, and it's harder to change because nobody can see all of it.
+"Schema versus schemaless" is the least important difference. Every system has a schema; the question is whether the database enforces it on write or your code assumes it on read. A document store's schema lives in every piece of code that expects a field to be there, which makes it harder to change, because nobody can see all of it.
 
 The distinction that matters is **query flexibility versus predictable scale**.
 
-A relational database stores data normalised — each fact once — and reassembles it at query time with joins. A planner decides how to execute each query from statistics about the data. That's what makes it good at questions nobody anticipated: you write the SQL, the planner works out how. Transactions span any rows you like, and constraints (unique, foreign key, check) are enforced by the database itself, which — as the [API post]({{< relref "designing-an-api-that-survives-failure.md" >}}) argues at length — is the only place they're reliably enforced.
+A relational database stores each fact once and reassembles data at query time with joins, using a planner that picks an execution strategy from statistics. That's what makes it good at questions nobody anticipated. Transactions span any rows, and constraints are enforced by the database itself — the only place they're reliably enforced, as the [API post]({{< relref "designing-an-api-that-survives-failure.md" >}}) argues. The price is that a query's cost is decided at runtime: a query that took 5ms yesterday can occasionally take 5 seconds today because the statistics changed. And scaling writes beyond one primary is hard, because transactions and constraints over arbitrary rows are hard to distribute.
 
-What you pay for that flexibility is that the cost of a query is decided at runtime, by a planner, from statistics. Usually that's fine. Occasionally a query that took 5ms yesterday takes 5 seconds today because the statistics changed and the planner chose differently. And scaling writes beyond one primary is genuinely hard, because transactions and constraints that span arbitrary rows are hard to distribute.
-
-"NoSQL" is not one thing. It's a family:
+"NoSQL" is a family:
 
 - **Key-value** — get and put by key. Redis, the simplest use of DynamoDB.
-- **Document** — a key maps to a structured document (JSON) you can query into. MongoDB, Cosmos DB's NoSQL API.
-- **Wide-column** — rows keyed by a partition key and sorted by a clustering key within it. Cassandra; DynamoDB's data model is close to this.
-- **Graph** — nodes and edges, for traversal-heavy queries. Neo4j, Cosmos DB's Gremlin API.
+- **Document** — a key maps to a JSON document you can query into. MongoDB, Cosmos DB's NoSQL API.
+- **Wide-column** — rows keyed by a partition key and sorted by a clustering key. Cassandra; DynamoDB is close.
+- **Graph** — nodes and edges for traversals. Neo4j, Cosmos DB's Gremlin API.
 
-What most of them share is the opposite trade: **you design storage around known access patterns, and in exchange every operation has a predictable cost at any scale.** Data is partitioned by a key you choose, operations that touch one partition are fast and cheap regardless of total size, and operations that don't are expensive or impossible. Transactions, where they exist, are usually scoped to one partition or capped in size.
+Most share the opposite trade: **you design storage around known access patterns, and in exchange every operation has a predictable cost at any scale.** Data is partitioned by a key you choose; operations within one partition are cheap regardless of total size, and operations across partitions are expensive or impossible. Transactions, where they exist, are usually scoped to a partition or capped in size.
 
-Neither is better. They're priced differently. A relational database charges at query time for flexibility; a partitioned NoSQL store charges at design time for predictability. The question is which bill you'd rather pay.
+![Two panels. Left, relational, pay at query time: customers, orders and order_lines tables, each fact stored once, feed a planner that answers any query with joins at query time; listed gains are unplanned questions and transactions across any rows, listed costs are cost decided at runtime and writes limited to one primary. Right, partitioned, pay at design time: access patterns drive a key design of PK = CUSTOMER#id and SK = ORDER#date, spreading data across partitions P1 to P3 with CUSTOMER#42 highlighted in P2, and a red dashed arc spanning P1 to P3; listed gains are one key, one partition and the same cost at any size, the listed cost is that cross-partition work is expensive or impossible](sql-vs-nosql.svg)
+
+Neither is better; they're priced differently. A relational database charges at query time for flexibility. A partitioned store charges at design time for predictability.
 
 ### Postgres is the default for a reason
 
-For most applications the right starting point is a relational database, and in practice that's usually Postgres. Not because it wins every benchmark, but because it covers more of the question list above than anything else: ad-hoc queries, real transactions, enforced constraints, and — with `jsonb` — a credible document store in the same database. A `jsonb` column with a GIN index handles "some fields vary per row" without a second system.[^jsonb]
+For most applications the right start is a relational database, usually Postgres — not because it wins every benchmark, but because it answers more of the questions above than anything else: ad-hoc queries, real transactions, enforced constraints, and with `jsonb` and a GIN index, a credible document store for "some fields vary per row."[^jsonb]
 
-The cases where it stops being the default are the cases where one of the questions above has an extreme answer: throughput or geography beyond what one primary can serve, or analytical scans over data far larger than memory. Those are exactly the cases the other technologies in this post exist for. But to understand *why* they exist — why a row store is bad at scans, why an LSM is good at writes, why a partition key matters so much — you need to look underneath.
+It stops being the default when one question has an extreme answer: write throughput or geography beyond one primary, or analytical scans over data far larger than memory. Why those break it — and why a row store is bad at scans, an LSM good at writes, a partition key so important — is underneath.
 
 ## Underneath: how a database actually stores and finds data
 
-Every storage engine is an answer to two physical facts. Storage is read and written in fixed-size units — Postgres, for instance, stores every table and index as files made of 8KB pages[^filelayout] — and **a page that isn't in memory is expensive to fetch, much more so when fetches are random rather than sequential.** Postgres's own planner encodes this: by default it costs a random page fetch at four times a sequential one, and its documentation notes that the real gap on durable storage is "normally much more expensive than four times," with the default kept low only because most random reads are assumed to hit cache.[^pagecost] Everything below — pages, indexes, logs, compaction — is about touching fewer pages, or touching them sequentially rather than randomly.
+Storage is read and written in fixed-size pages — Postgres stores every table and index as files of 8KB pages[^filelayout] — and **a page that isn't in memory is expensive to fetch, much more so randomly than sequentially.** Postgres's planner costs a random page fetch at four times a sequential one by default, and its docs say random access to durable storage is "normally much more expensive than four times" sequential; the default is low because most random reads are assumed to hit cache.[^pagecost] Everything below — pages, indexes, logs, compaction — is about touching fewer pages, or touching them sequentially.
 
-Postgres is a good engine to learn this on, because it's well documented and it makes some unusual choices that clarify the general picture by contrast.
+Postgres is the worked example: well documented, and its unusual choices make the general picture clearer.
 
 ### Pages and the heap
 
-Postgres stores every table and every index as an array of fixed-size **pages**, usually 8KB, and the page is the unit it reads and writes — 16 disk sectors at a time, in the docs' own arithmetic.[^pagelayout][^walreliability] So to read one row, Postgres reads the whole page that contains it.
-
-A table page has a small fixed header, then an array of **line pointers** growing forward from the start, then free space, then the actual row data (**tuples**) growing backward from the end:
+The page is the unit Postgres reads and writes — 16 disk sectors at a time — so reading one row means reading its whole page.[^pagelayout][^walreliability] A table page has a header, then **line pointers** growing forward, free space, and row data (**tuples**) growing backward from the end:
 
 ![An 8KB Postgres page: a 24-byte header, then line pointers 1 to 3 growing forward, free space in the middle, and tuples 1 to 3 growing backward from the end of the page, each line pointer pointing at its tuple](page-layout.svg)
 
-The indirection matters. A row's address — its **`ctid`** — is (page number, line pointer number), and a line pointer is never moved while it's in use, so the tuple itself can be shifted around within the page without anything that points at it needing to change.[^pagelayout]
+A row's address, its **`ctid`**, is (page, line pointer). Line pointers don't move while in use, so tuples can shift within the page without anything pointing at them changing.[^pagelayout]
 
-The table itself is a **heap**: tuples are stored in no particular order, wherever there's room. That's an important and somewhat unusual choice, and it comes back when we compare with MySQL.
+The table is a **heap**: tuples in no particular order, wherever there's room. That choice matters when we get to MySQL.
 
-Each tuple carries a header (23 bytes on most machines) before the data, and three fields in it are the key to how Postgres handles concurrency: `t_xmin`, the ID of the transaction that inserted this version; `t_xmax`, the ID of the transaction that deleted or replaced it; and `t_ctid`, which points to the newer version of the row if there is one.[^pagelayout]
+Each tuple has a 23-byte header on most machines, with three fields that drive concurrency: `t_xmin` (the inserting transaction), `t_xmax` (the deleting or replacing transaction) and `t_ctid` (the newer version, if any).[^pagelayout]
 
-Values too large to sit comfortably in a page are handled by **TOAST**. When a row would exceed about 2KB, Postgres compresses its large fields and, if that's not enough, moves them out of line into a separate TOAST table, leaving an 18-byte pointer behind. Any single value is capped at 1GB.[^toast] The practical consequence: wide `text` or `jsonb` columns cost little on queries that don't read them, and unchanged TOASTed values aren't rewritten when you update other columns.
+Large values go to **TOAST**: past about 2KB per row, Postgres compresses large fields and, if needed, moves them to a separate table behind an 18-byte pointer, up to 1GB per value.[^toast] So wide `text` or `jsonb` columns cost little to queries that don't read them, and unchanged TOASTed values aren't rewritten when other columns update.
 
 ### MVCC: why an UPDATE is really an INSERT
 
-Postgres uses **multi-version concurrency control**. Instead of locking a row while someone reads it, it keeps multiple versions and lets each transaction see the versions that were committed as of its snapshot. The payoff, in the docs' words: "reading never blocks writing and writing never blocks reading."[^mvcc]
-
-The mechanism is those header fields. An `UPDATE` doesn't modify the row in place. It sets `t_xmax` on the old version and writes a complete new version elsewhere, with `t_xmin` set to the updating transaction. A transaction's snapshot then decides which version it sees by comparing those IDs against what had committed when the snapshot was taken.
+With **multi-version concurrency control**, Postgres keeps multiple row versions and each transaction sees the ones committed as of its snapshot, so "reading never blocks writing and writing never blocks reading."[^mvcc] An `UPDATE` sets `t_xmax` on the old version and writes a complete new one with `t_xmin` set; snapshots choose between them by transaction ID.
 
 ![Transaction 205 updates a row. Left, an ordinary update: old version v1 on page 7 gets xmax 205, new version v2 is written on page 9 with xmin 205, t_ctid links them, and the index gains a second entry pointing at v2. Right, a HOT update: v2 is written on the same page 7, linked by t_ctid, and the index keeps its single entry](mvcc-update.svg)
 
-That has consequences that are worth being able to explain:
+The consequences:
 
-**Dead tuples and bloat.** Old versions don't disappear when the updating transaction commits — someone with an older snapshot might still need them. Once no transaction can see them, they're dead, and **`VACUUM`** reclaims their space for reuse. It doesn't normally give the space back to the operating system; it marks it reusable within the table.[^vacuum] A table with heavy updates and vacuum that can't keep up grows — that's bloat — and so do its indexes.
+**Dead tuples and bloat.** Old versions outlive the update, since older snapshots may need them. Once nothing can see them, **`VACUUM`** marks their space reusable — within the table, not returned to the OS.[^vacuum] Heavy updates with vacuum falling behind means bloat, in tables and indexes.
 
-**Every index sees every version.** If a new row version lives at a new `ctid`, every index on the table needs a new entry pointing to it. An update that changes one unindexed column on a table with eight indexes can mean nine writes.
+**Every index sees every version.** A new version at a new `ctid` needs a new entry in every index. One unindexed-column update on a table with eight indexes can be nine writes.
 
-**HOT updates** are the mitigation. If the update doesn't change any indexed column, and there's free space on the same page for the new version, Postgres does a **heap-only tuple** update: the new version goes on the same page, chained from the old one, and no index entries are added. Old versions in the chain can then be pruned during normal operation, without waiting for vacuum.[^hot] This is why `fillfactor` exists — setting it below 100 leaves free space on each page so that updates can stay HOT. It's also a concrete reason not to index columns you don't query by: each one is a column whose update disqualifies HOT. The exception is BRIN, a "summarizing" index type covered below: since PostgreSQL 16, updating a column that only BRIN indexes cover no longer blocks a HOT update.[^hot][^pg16]
+**HOT updates** avoid that. If no indexed column changes and the page has room, Postgres writes a **heap-only tuple** on the same page, chained from the old one, with no new index entries, and prunes the chain without waiting for vacuum.[^hot] That's what `fillfactor` below 100 is for, and a reason not to index columns you don't query: each one disqualifies HOT when it changes. Since PostgreSQL 16, columns covered only by BRIN indexes (below) no longer do.[^hot][^pg16]
 
-**Transaction ID wraparound.** Transaction IDs are 32-bit, compared with modular arithmetic, so the system has to vacuum every table at least once every two billion transactions. Vacuum **freezes** old tuples, marking them as visible to everyone so their XID no longer matters. If that doesn't happen, Postgres warns as it gets close and eventually refuses to assign new transaction IDs at all — a full write outage — to avoid old rows suddenly appearing to be in the future.[^vacuum] This is the canonical reason "never disable autovacuum" is a rule rather than a suggestion.
+**Transaction ID wraparound.** Transaction IDs are 32-bit and compared modularly, so every table must be vacuumed at least once per two billion transactions; vacuum **freezes** old tuples so their ID no longer matters. Fall behind and Postgres eventually stops assigning transaction IDs — a write outage — rather than let old rows appear to be in the future.[^vacuum] Hence "never disable autovacuum."
 
-The **visibility map** ties this together. It keeps two bits per heap page: *all-visible*, meaning every tuple on the page is visible to all transactions, and *all-frozen*, meaning every tuple is already frozen. Ordinary vacuum skips all-visible pages; the aggressive vacuum that protects against wraparound can skip all-frozen ones, which is what keeps it affordable on a large, mostly static table. Index-only scans use the all-visible bit to skip heap lookups — which comes back below.[^vacuum]
+The **visibility map** ties this together: two bits per page, *all-visible* and *all-frozen*. Ordinary vacuum skips all-visible pages, wraparound vacuum skips all-frozen ones, and index-only scans use the all-visible bit to skip the heap.[^vacuum]
 
 ### The WAL: how durability works
 
-A committed transaction must survive a crash. The naive way is to write every changed data page to disk at commit, which would be slow: those pages are scattered all over the files, so every commit would be many random writes.
+Writing every changed page at commit would be many random writes. Instead, Postgres follows the **write-ahead log** rule: a data page may be written only *after* the log record describing the change is durable.[^wal] Commit flushes only the WAL — one sequential append, often shared by several concurrent commits — and data pages are written back lazily.[^wal] After a crash, Postgres replays the WAL from the last **checkpoint**.[^wal]
 
-Postgres instead uses a **write-ahead log**. The rule is that a change to a data file may be written only *after* a log record describing it has been flushed to durable storage.[^wal] At commit, only the WAL needs flushing — and the WAL is appended sequentially, so that's one sequential write rather than many random ones. With many small transactions running concurrently, one `fsync` of the WAL can commit several of them at once.[^wal] The changed data pages stay in memory and are written back lazily.
+The WAL is only as durable as the hardware: drives and controllers with volatile write caches, including many SSDs, can acknowledge writes a power cut then loses.[^walreliability] And since an 8KB page spans sixteen 512-byte sectors, a crash can leave a **torn page**, so the first change to a page after each checkpoint logs the whole page image (`full_page_writes`) — which is also why WAL volume spikes after checkpoints.[^walreliability][^fullpage]
 
-After a crash, Postgres replays the WAL from the last **checkpoint**, redoing any changes that hadn't reached the data files.[^wal] Checkpoints periodically flush dirty pages so that replay has a bounded starting point.
+The WAL also drives replication: a streaming replica replays the primary's WAL, and **logical decoding** streams the same changes as row-level events — the clean way to feed another system without dual writes.[^logical]
 
-The log is only as durable as the hardware lets it be. Postgres forces the WAL to storage with `fsync` or an equivalent, but a drive or controller with a volatile write-back cache can acknowledge a write that a power cut then loses — the docs specifically warn that many SSDs have such caches and don't honour flush commands by default.[^walreliability] And because an 8KB page spans sixteen 512-byte sectors, a crash mid-write can leave a **torn page**, half old and half new, which row-level WAL records can't repair. So the first time a page is modified after a checkpoint, Postgres writes the *entire* page image into the WAL (`full_page_writes`, on by default), giving recovery a known-good copy to start from.[^walreliability][^fullpage] That's also why WAL volume jumps just after each checkpoint, and why spacing checkpoints further apart reduces it.[^fullpage]
-
-The WAL is also the replication mechanism. A streaming replica is, more or less, another server continuously replaying the primary's WAL. And **logical decoding** streams the same changes out to external consumers as row-level events — the basis for change data capture, and the cleanest way to feed a second database from Postgres without dual writes.[^logical]
-
-The general lesson, which the WAL documentation states in Postgres's own terms: **a database turns many scattered page writes into one sequential log write at commit, and writes the real structure later.**[^wal] LSM trees, below, take that idea to its conclusion.
+The general lesson: **turn many scattered page writes into one sequential log write at commit, and write the real structure later.**[^wal] LSM trees take that to its conclusion.
 
 ### "Storage engines": Postgres's heap vs InnoDB's clustered index
 
-"Which storage engine does Postgres use" is a reasonable interview question with a slightly surprising answer. For most of its history the heap was simply *how Postgres stored tables*. Since PostgreSQL 12 there's a **table access method** interface, which lets an extension supply a different storage implementation behind the same SQL; the built-in `heap` is the default and the reference implementation.[^tableam] Alternatives exist as extensions — columnar storage among them — but in practice almost every Postgres table is a heap.
-
-MySQL went the other way: it has a pluggable storage engine architecture, where engines handle the storage for different table types and can be chosen per table.[^mysqlengines] The default, **InnoDB**, makes a different fundamental choice. An InnoDB table *is* its primary key index: the rows are stored in the leaf pages of a B-tree ordered by primary key. That's a **clustered index**. Every secondary index stores the primary key value rather than a physical row address, and a lookup through a secondary index finds the primary key and then searches the clustered index for the row.[^innodb]
+Since PostgreSQL 12, a **table access method** interface lets extensions supply other storage behind the same SQL, but the built-in `heap` is the default and almost every table uses it.[^tableam] MySQL has pluggable engines chosen per table,[^mysqlengines] and its default, **InnoDB**, makes the opposite choice: a table *is* its primary key B-tree, with rows in the leaf pages — a **clustered index**. Secondary indexes store the primary key, so a lookup through one then searches the clustered index.[^innodb]
 
 The two designs have opposite strengths:
 
-- **Range scans by primary key** are cheap in InnoDB — the rows are physically in key order. In Postgres the heap keeps no order, so a range of IDs can be scattered across many pages. Postgres's `CLUSTER` command exists precisely to fix this: it physically rewrites a table in index order so that a range scan finds neighbouring rows on the same page — but it's a one-time reorder, and later inserts and updates aren't kept in order.[^cluster] (SQL Server makes the same choice as InnoDB when a table has a clustered index, and stores rows in an unordered heap when it doesn't.[^sqlserver])
-- **Secondary index lookups** are one step in Postgres (index → `ctid` → heap page) and two in InnoDB (secondary → primary key → clustered index).[^innodb]
-- **Primary key size** matters much more in InnoDB, because every secondary index carries a copy. The MySQL docs say directly that a short primary key is advantageous.[^innodb]
-- **Random primary keys** hurt InnoDB more. Inserting UUIDv4 keys into a clustered index means inserting *rows* at random positions throughout the table's B-tree. MySQL's documentation puts numbers on the result: sequential inserts leave clustered index pages about 15/16 full, random inserts anywhere from 1/2 to 15/16 full.[^innodbphysical] In Postgres the row goes wherever there's room in the heap, and only the index takes the random insert.
-
-That last point is a good reason to understand the B-tree itself.
+- **Primary key range scans** are cheap in InnoDB, where rows are in key order. In Postgres a range of IDs can be scattered across pages; `CLUSTER` reorders a table once, but later writes aren't kept in order.[^cluster] (SQL Server matches InnoDB when a table has a clustered index, and uses a heap when it doesn't.[^sqlserver])
+- **Secondary index lookups** are one step in Postgres (index → `ctid` → heap) and two in InnoDB (secondary → primary key → row).[^innodb]
+- **Primary key size** matters more in InnoDB, where every secondary index carries a copy; MySQL recommends short keys.[^innodb]
+- **Random keys** hurt InnoDB more: UUIDv4 keys insert *rows* at random positions in the table's B-tree, leaving pages 1/2 to 15/16 full against about 15/16 for sequential inserts.[^innodbphysical] In Postgres only the index takes the random insert.
 
 ### How a B-tree index works
 
-A B-tree index is a balanced tree of pages. In Postgres, the bottom level is **leaf pages**, whose entries are key values with `ctid`s pointing to table rows; every level above is **internal pages**, whose entries are keys with pointers to the next level down. Each level is also a doubly linked list of its pages, and typically more than 99% of an index's pages are leaves.[^btree]
+A B-tree is a balanced tree of pages. **Leaf pages** hold keys with `ctid`s; **internal pages** hold keys with pointers to the level below; each level is a linked list, and typically over 99% of pages are leaves.[^btree]
 
 ![A three-level B-tree. The root holds keys 100 and 200; the middle internal page holds 130 and 160; leaves cover 100–129, 130–159 and 160–199. The lookup for 145 is highlighted from root to the 130–159 leaf, and a range scan continues right along the link to the 160–199 leaf](btree-descent.svg)
 
-A lookup for key 145 reads the root, follows the pointer for the range 100–200, reads that internal page, follows the pointer for 130–160, and lands on the leaf holding 145. **One page visit per level.** A range scan for 145–175 does the same descent and then walks right along the linked leaves, which is why B-trees serve `BETWEEN`, `<`, `>` and `ORDER BY` — anything that maps to a contiguous key range.[^indextypes] Prefix `LIKE 'foo%'` belongs on that list too, with a caveat that catches people: a plain B-tree only serves it under the "C" collation. On a database using a normal locale, the index needs the `text_pattern_ops` (or `varchar_pattern_ops`) operator class, which compares character by character instead of by locale rules.[^indextypes][^opclass]
+A lookup for 145 reads one page per level down to the leaf. A range scan for 145–175 descends once, then walks right along the leaves — which is why B-trees serve `BETWEEN`, `<`, `>`, `ORDER BY` and prefix `LIKE 'foo%'`.[^indextypes] (Prefix `LIKE` needs the "C" collation or a `text_pattern_ops` index under a normal locale.[^opclass])
 
-The reason B-trees work so well is **fan-out**. This part is arithmetic rather than anything a manual states, so here it is in full. With an 8-byte key, an 8KB page holds a few hundred entries once you allow for per-entry overhead; call it 300. A root plus two internal levels can address 300 × 300 × 300 ≈ 27 million leaf pages, and at ~300 entries per leaf that's around 8 billion rows — **four page visits for any one of 8 billion rows.** Add one more level and the reach is multiplied by 300 again.
+**Fan-out** is why this works. With 8-byte keys, an 8KB page holds a few hundred entries; call it 300. Three levels above the leaves address 300³ ≈ 27 million leaf pages, or about 8 billion rows — **four page visits for any one of 8 billion rows.** The upper levels are tiny, so they're usually cached and most lookups touch storage only at the leaf, if at all. `EXPLAIN (ANALYZE, BUFFERS)` shows it: `shared hit` for cached pages, `shared read` for fetched ones.[^explain]
 
-The upper levels of the tree are tiny by comparison — the docs note that typically over 99% of an index's pages are leaves[^btree] — so they're usually already in memory, and most lookups reach storage only for the leaf, if at all. That's a claim you can check on your own system rather than take on trust: `EXPLAIN (ANALYZE, BUFFERS)` reports, per plan node, how many pages were found in Postgres's buffer cache (`shared hit`) and how many had to be requested from the operating system (`shared read`).[^explain]
+The tree grows from the bottom: a full leaf **splits**, pushing a pointer into its parent, which may split in turn; a root split adds a level.[^btree] Every leaf stays the same distance from the root.
 
-The tree grows from the bottom. When an insert doesn't fit in a leaf, the page **splits**: part of its entries move to a new page, and a pointer to the new page is inserted into the parent, which may split in turn. If the split cascades all the way up and the root overflows, a new root is created above it, adding a level.[^btree] That's why the tree stays balanced: every leaf is always the same distance from the root.
+**Key order matters.** Increasing keys — identity, timestamp, UUIDv7 — always insert at the rightmost leaf, so writes touch one small region. Random keys like UUIDv4 insert everywhere, split pages everywhere and leave them partly empty (the InnoDB figures above are the same B-tree mechanism). Once the index outgrows the cache, most inserts touch an uncached leaf, which means a random page fetch. PostgreSQL 18's built-in `uuidv7()` gives unique, time-ordered keys.[^uuid][^pg18]
 
-**Why key order matters.** If keys arrive in increasing order — an identity column, a timestamp, a UUIDv7 — every insert goes to the rightmost leaf. Pages fill up and split at the edge, and the part of the index being written is one small region. If keys arrive randomly — UUIDv4 — inserts land on leaves all over the index, pages split everywhere, and they're left partly empty: MySQL documents the result for its clustered indexes as pages anywhere from half to 15/16 full under random inserts, against about 15/16 full for sequential ones.[^innodbphysical] The mechanism is the B-tree's, not MySQL's, so the same pressure applies to a Postgres index on a random key. The consequence that follows from the cost model above: every insert touches a different leaf page, so once the index is larger than the cache, those page visits stop being cache hits and become random fetches. PostgreSQL 18 added a built-in `uuidv7()` that generates time-ordered UUIDs, which keeps the global uniqueness of a UUID without the random insert pattern.[^uuid][^pg18]
-
-Two refinements in modern Postgres are worth knowing. **Deduplication** stores repeated key values once with a sorted list of `ctid`s, rather than once per row, which shrinks indexes on low-cardinality columns considerably; it's on by default.[^btree] And **bottom-up index deletion** (PostgreSQL 14) removes index entries for dead row versions proactively when a page is about to split because of update churn, instead of waiting for vacuum.[^btree]
+Two modern refinements: **deduplication** stores a repeated key once with a list of `ctid`s, shrinking low-cardinality indexes, and **bottom-up index deletion** (PostgreSQL 14) clears dead entries when update churn would otherwise split a page.[^btree]
 
 ### Using indexes well
 
-Knowing the structure explains the rules that otherwise look arbitrary.
+**Composite indexes follow a leftmost-prefix rule.** An index on `(customer_id, created_at)` serves `WHERE customer_id = 42 AND created_at > '2026-01-01'` with one descent and a short walk, but serves `created_at` alone poorly, because its matches are spread across every customer. Postgres's rule: equality on leading columns plus an inequality on the next column bound the scan.[^multicolumn] So: **equality columns first, then the range column.** PostgreSQL 18's skip scan can rescue a low-cardinality unconstrained leading column, but it's a fallback, not a design.[^multicolumn][^pg18]
 
-**Composite indexes have a leftmost-prefix rule.** An index on `(customer_id, created_at)` is sorted by `customer_id`, then by `created_at` within each customer. It can serve `WHERE customer_id = 42 AND created_at > '2026-01-01'` with one descent and a short walk. It's far less useful for `WHERE created_at > '2026-01-01'` alone, because matching rows are spread across every customer's section of the tree. The Postgres docs give the exact rule: equality constraints on the leading columns, plus an inequality on the first column without an equality, are what limit the portion of the index scanned.[^multicolumn] Hence the heuristic: **equality columns first, then the range column.** (PostgreSQL 18 added skip scan, which can use an index whose leading column isn't constrained when that column has few distinct values. It's a useful fallback, not a reason to get the column order wrong.[^multicolumn][^pg18])
+**Covering indexes skip the heap.** A normal index scan fetches each row from the heap in index order, the expensive way.[^explain] If the index holds every column the query needs (`INCLUDE` adds non-key columns), Postgres can do an **index-only scan** — but only for pages the visibility map marks all-visible, so on heavily updated tables it hits the heap anyway.[^indexonly]
 
-**Covering indexes avoid the heap entirely.** A normal index scan finds `ctid`s in the index and then fetches each row from the heap — rows fetched in index order rather than physical order, which the docs describe as the expensive way to read them.[^explain] If every column the query needs is in the index, Postgres can do an **index-only scan** and skip the heap. `INCLUDE` adds non-key payload columns to a B-tree index for exactly this purpose.[^indexonly]
+**Partial and expression indexes** cover a subset of rows (`WHERE status = 'pending'`) or a computed value (`lower(email)`).[^partial][^expression] A partial index over the 1% of pending orders is small enough to stay cached, and the common values it leaves out wouldn't be fetched through an index anyway, so indexing them would only add size.[^partial]
 
-There's a catch that follows directly from MVCC: index entries don't carry visibility information, so Postgres can only skip the heap for pages that the visibility map marks all-visible. On a table that's being updated heavily, many pages won't be, and the "index-only" scan goes to the heap anyway.[^indexonly] Index-only scans pay off on data that changes slowly, and a table that vacuum hasn't processed recently will show more heap fetches than you expect.
+**Every index costs every write** — inserts, non-HOT updates, deletes — and competes for memory.
 
-**Partial and expression indexes** index a subset of rows (`WHERE status = 'pending'`) or a computed value (`lower(email)`).[^partial][^expression] A partial index over the 1% of orders still pending is a fraction of the size of a full one, which makes it far more likely to stay cached — and the docs' own reasoning for partial indexes is that a query for a common value won't use the index anyway, so indexing those rows only adds size.[^partial]
-
-**Every index is paid for on every write.** An index speeds up the reads that use it and slows down every insert, every non-HOT update, and every delete, and it competes for memory. "Add an index" is a trade, not a free fix.
-
-Here's what that looks like in a plan, on an `orders` table with an index only on `id`:
+Here's the difference in a plan, on `orders` with an index only on `id`:
 
 ```sql
 EXPLAIN SELECT id, total FROM orders
@@ -183,7 +157,7 @@ ORDER BY created_at;
 --         Filter: ((customer_id = 42) AND (created_at >= '2026-10-01'))
 ```
 
-A sequential scan reads every page of the table and discards almost everything. Add a composite, covering index:
+The sequential scan reads every page and discards almost everything. Add a composite, covering index:
 
 ```sql
 CREATE INDEX orders_customer_created
@@ -193,50 +167,48 @@ CREATE INDEX orders_customer_created
 --   Index Cond: ((customer_id = 42) AND (created_at >= '2026-10-01'))
 ```
 
-The equality column comes first, so the scan starts at customer 42. The range column comes second, so it starts at the right date and walks forward. The index is already in `created_at` order within the customer, so the sort disappears. `id` and `total` — the only other columns the query returns — are included, so the heap isn't touched, on pages the visibility map says are all-visible. Leave either out and the plan falls back to a plain index scan with a heap fetch per row. (These are plan shapes, abbreviated; on a real table, run `EXPLAIN (ANALYZE, BUFFERS)` and read the buffer counts, which tell you how many pages were actually touched.)
+The scan starts at customer 42's first matching date, walks forward already in `created_at` order (so the sort disappears), and never touches the heap on all-visible pages. Drop `INCLUDE` and it becomes an index scan with a heap fetch per row. (Plans abbreviated; on a real table, read the `BUFFERS` counts.)
 
-**Why the planner sometimes ignores your index — correctly.** For a query that matches a large fraction of the table, following an index means fetching rows one at a time out of physical order, and reading the whole table sequentially is cheaper; the docs note that a sequential scan and sort "frequently beats an index scan for sorting many rows, because of the nonsequential disk access required by the index scan."[^explain] The planner estimates selectivity — the fraction of rows a condition matches — from statistics, and prices each plan with the page costs described at the top of this section.[^plannerstats][^pagecost] In between, it may use a **bitmap heap scan**: collect all matching row locations from the index, sort them into physical order, and then read each needed page once.[^explain] If the planner is choosing badly, out-of-date statistics are a more likely cause than a missing index; `ANALYZE` refreshes them.[^plannerstats]
+**The planner sometimes ignores your index, correctly.** For a large fraction of the table, sequential reading beats fetching rows out of order — the docs note a sequential scan and sort "frequently beats an index scan for sorting many rows."[^explain] The planner estimates selectivity from statistics and prices each plan with the page costs above.[^plannerstats][^pagecost] Between the extremes — too many rows for an index scan, too few for a sequential one — a **bitmap heap scan** sorts matching locations into physical order and reads each page once.[^explain] When plans go wrong, stale statistics are a likelier cause than a missing index; `ANALYZE` refreshes them.[^plannerstats]
 
 ### The other index types
 
-B-tree is the default and the right answer most of the time. Postgres has others for data that doesn't fit a single sort order:[^indextypes]
+B-tree is usually right. The others handle data without a single sort order:[^indextypes]
 
-- **Hash** — equality only. Rarely better than a B-tree in practice.
-- **GIN** — an inverted index with one entry per *component* of a value. The right choice for "which rows contain this": `jsonb` containment (`@>`), arrays, full-text search.
-- **GiST / SP-GiST** — frameworks for non-linear data: geometry, ranges, nearest-neighbour searches (`ORDER BY location <-> point`). PostGIS lives here.
-- **BRIN** — stores only a summary (for ordered types, the min and max) of each range of physically adjacent pages. It's designed for very large tables where a column correlates with physical location — the docs' own example is an order date, where earlier orders sit earlier in the table — which is exactly the shape of an append-only time-series table.[^indextypes][^brin] Because it holds one entry per block range rather than per row, it's very small, and the index's size is directly set by how many pages each range covers.[^brin] The trade is that it's lossy: it can only rule out block ranges, so every row in a matching range is rechecked.[^brin]
+- **Hash** — equality only; rarely better than a B-tree.
+- **GIN** — an inverted index, one entry per component of a value: `jsonb` containment, arrays, full-text search.
+- **GiST / SP-GiST** — geometry, ranges, nearest-neighbour (`ORDER BY location <-> point`). PostGIS lives here.
+- **BRIN** — a min/max summary per range of adjacent pages. Tiny, and ideal when a column tracks physical order, as timestamps do in an append-only table; lossy, so matching ranges are rechecked.[^indextypes][^brin]
 
 ### B-trees vs LSM trees
 
-A B-tree updates data **in place**: an insert finds the right leaf page and modifies it. Reads are excellent — one descent, data is where the index says. Writes are random I/O plus the WAL.
+A B-tree updates **in place**: excellent reads, random-I/O writes.
 
-A **log-structured merge tree** goes the other way. The design was introduced by O'Neil and colleagues in 1996 as a way to make high insert rates affordable by deferring and batching index changes,[^lsmpaper] and it underlies many write-heavy stores; RocksDB is a widely embedded, well-documented implementation. The write path in RocksDB:[^rocksdb]
+A **log-structured merge tree**, introduced by O'Neil and colleagues in 1996 to make high insert rates affordable,[^lsmpaper] defers and batches instead. In RocksDB:[^rocksdb]
 
-1. A write goes to an in-memory sorted structure, the **memtable**, and to a log for crash recovery.
-2. When the memtable fills, it's flushed to disk as an immutable, sorted **SST file**. This is a sequential write.
-3. Over time there are many SST files, possibly holding different versions of the same key. Background **compaction** merges them, keeping the newest version and dropping overwritten and deleted keys.
+1. Writes go to an in-memory sorted **memtable** and a recovery log.
+2. A full memtable is flushed as an immutable sorted **SST file** — a sequential write.
+3. Background **compaction** merges SST files, keeping the newest version of each key.
 
 ![LSM write and read paths. A write is appended to a log on disk and inserted into the in-memory memtable; a full memtable is flushed to a sorted SST file in level 0, and compaction merges level 0 files into level 1. A read checks the memtable first, then consults each file's Bloom filter and reads only the files that might hold the key](lsm-write-path.svg)
 
-Data files are written whole and never modified in place — new data arrives by flushing a memtable, old data leaves by compaction rewriting files — so the write path is sequential, which by the cost model at the top of this section is the cheap kind of I/O.[^rocksdb][^pagecost] The price moves to reads: a key could be in the memtable or any of several SST files, so a read may check several places. **Bloom filters** — small probabilistic structures that can say "this key is definitely not in this file" — let reads skip files that can't contain the key.[^rocksdb] Compaction strategies trade between *write amplification* (how often data is rewritten), *read amplification* (how many places a read checks) and *space amplification* (how much obsolete data sits on disk). In RocksDB's terms, universal compaction typically gives lower write amplification at the cost of higher space and read amplification than the default leveled compaction.[^rocksdb]
+Files are never modified in place, so writes are sequential — the cheap kind.[^rocksdb] Reads pay instead: a key may be in the memtable or several files, and **Bloom filters** let a read skip files that can't hold it. Compaction strategies trade write, read and space amplification; RocksDB's universal compaction lowers write amplification at the cost of the other two compared with leveled.[^rocksdb]
 
-The summary is a trade you'll see again: **B-trees optimise for reads and pay on writes; LSM trees optimise for writes and pay on reads and in background compaction.** The columnar engine in the next section is a third answer, optimised for scanning.
+**B-trees optimise reads and pay on writes; LSM trees optimise writes and pay on reads and compaction.** Column stores are a third answer, optimised for scans.
 
 ## Row vs column storage: OLTP vs OLAP
 
-Everything above is a **row store**: a page holds complete rows. That's ideal for transactional work (OLTP) — fetch an order, update a payment — where you want all the columns of a few rows.
+Everything above is a **row store**: pages hold whole rows, ideal for transactional work (OLTP) that wants all columns of a few rows. It's the wrong layout for analytics (OLAP): "revenue by country for 90 days" needs two columns of a billion rows, and a row store reads every column of every one. Indexes don't help when the query needs most rows.
 
-It's the wrong layout for analytics (OLAP). "Sum revenue by country for the last 90 days" needs two or three columns from a billion rows. A row store reads every page of every row, including the twenty columns the query doesn't care about. Indexes don't save you: the query really does need most of the rows.
-
-A **column store** turns the layout sideways. The values of each column are stored together, so only the columns a query references are read from disk.[^chintro] And because a column holds values of one type that are often similar or repeated — country codes, event types, timestamps close to each other — column stores are, in ClickHouse's words, "particularly well suited" to compression, which shrinks storage and, since disk and network throughput are often the bottleneck, frequently speeds queries up too.[^chfast] Execution engines then pass data between operators in batches of values rather than one row at a time (vectorised execution), which lets them use SIMD instructions to process many values at once.[^chfast]
+A **column store** stores each column's values together, so queries read only the columns they reference.[^chintro] Similar values side by side compress well, which saves storage and, since I/O is often the bottleneck, time. Vectorised execution then processes values in batches with SIMD.[^chfast]
 
 ![The same four-row events table stored two ways. In a row store, two pages each hold whole rows of date, country, user, event and props, and a query on date and country reads both pages in full. In a column store, each column is its own file, and the same query reads only the date and country files](row-vs-column.svg)
 
-The cost is the mirror image, and it follows from the layout rather than from any one product's docs: fetching one complete row means visiting every column's data, and changing one row in place is awkward because that data is compressed and sorted in large blocks. ClickHouse's own guidance — batched inserts, and updates described as heavy operations — is the practical form of that trade, covered next. Column stores are built for appending in bulk and reading in bulk.
+The cost is the mirror image: reading one full row touches every column, and editing a row in compressed, sorted blocks is awkward. Column stores are for appending and reading in bulk.
 
 ### ClickHouse and MergeTree
 
-ClickHouse is a widely used open-source column store, and its main table engine family, **MergeTree**, combines the column layout with an LSM-like write path.
+ClickHouse's main engine family, **MergeTree**, pairs the column layout with an LSM-like write path:
 
 ```sql
 CREATE TABLE events
@@ -252,23 +224,23 @@ PARTITION BY toYYYYMM(event_time)
 ORDER BY (country, event_time);
 ```
 
-Each insert writes a new immutable **data part** to disk, sorted by the `ORDER BY` key, and ClickHouse merges parts in the background — the same shape as SST files and compaction.[^mergetree][^chfast] That's why ClickHouse wants inserts in large batches — its guidance is at least 1,000 rows per insert, ideally 10,000–100,000 — because every insert creates a part, and many small inserts create more parts than background merges can keep up with.[^chinsert]
+Each insert writes an immutable, sorted **data part**, merged in the background like SST files.[^mergetree][^chfast] Hence the guidance to insert at least 1,000 rows at a time, ideally 10,000–100,000: many small inserts make parts faster than merges can absorb them.[^chinsert]
 
-The `ORDER BY` key doubles as the primary key, and it works very differently from a B-tree. It's a **sparse index**: rather than one entry per row, it stores the key value of the first row of every **granule** — 8,192 rows by default. A query uses these marks to skip granules that can't contain matching rows, and the index is small enough to sit in memory.[^mergetree] So the sort order is the most important design decision for the table, and it has to follow the queries the table will actually serve. Scenario B's query is "daily active users by country for the last 90 days." With `(country, event_time)`, each country's rows are contiguous and time-ordered within it, so a filter on country and a date range skips straight to the matching granules. Leading with a column the query doesn't constrain — say `event_type` — would split every country's 90 days across every event type's section of the table and defeat the skipping. As a rule: columns the common queries filter on, in the order they're filtered, generally lower-cardinality before higher.
+The `ORDER BY` key is a **sparse index**: one entry per **granule** (8,192 rows by default), small enough to stay in memory, used to skip granules that can't match.[^mergetree] So the sort order is the key design decision and must follow the queries. For scenario B, `(country, event_time)` keeps each country's rows contiguous and time-ordered, so a country-and-date filter skips straight to its granules; leading with `event_type` would scatter them. The rule: filtered columns, in filter order, lower-cardinality first.
 
-Two consequences that trip people up:
+Two things trip people up:
 
-**The primary key is not unique.** ClickHouse will happily store several rows with the same key.[^mergetree] If you need "latest version of each row," `ReplacingMergeTree` removes duplicates — but only when parts merge, which happens in the background at an unpredictable time. The docs are explicit that it doesn't guarantee the absence of duplicates; queries that need exact answers add `FINAL`, which deduplicates at query time and costs accordingly.[^replacing]
+**The primary key isn't unique.**[^mergetree] `ReplacingMergeTree` deduplicates, but only when parts merge, at an unpredictable time; exact answers need `FINAL`, deduplicating at query cost.[^replacing]
 
-**Updates and deletes are heavy.** `ALTER TABLE ... UPDATE` is a *mutation*, asynchronous by default, and the docs describe it as "a heavy operation not designed for frequent use."[^alterupdate] Lightweight deletes mark rows deleted immediately and clean up in the background, which helps, but the design point is unchanged: **a column store is for data you append and analyse, not data you edit.**
+**Updates and deletes are heavy.** `ALTER TABLE ... UPDATE` is an asynchronous mutation, "a heavy operation not designed for frequent use."[^alterupdate] Lightweight deletes help, but **a column store is for data you append and analyse, not edit.**
 
-The same model, with a different operational shape, is behind BigQuery, Snowflake and Redshift (managed warehouses, billed by scan or compute) and DuckDB (an embedded column store, excellent for analysis on one machine). The choice between them is mostly about who runs it and how you pay. The storage trade-off is the same.
+BigQuery, Snowflake and Redshift (managed, billed by scan or compute) and DuckDB (embedded) share the model; the choice between them is mostly who runs it and how you pay.
 
 ## DynamoDB: design the access patterns first
 
-DynamoDB is AWS's managed key-value and wide-column store, and it's the purest example of the predictable-scale trade. You get consistent single-digit millisecond operations at essentially any size — tables have no practical size limit[^dynamoquotas] — on the condition that every access pattern is designed into the keys up front.
+DynamoDB is AWS's managed key-value and wide-column store, and the purest example of the predictable-scale trade: single-digit-millisecond operations on tables with no practical size limit,[^dynamoquotas] provided every access pattern is designed into the keys.
 
-**The data model.** Every item has a **partition key**, and optionally a **sort key**. The partition key is hashed to pick a partition. Within a partition, items with the same partition key are stored sorted by sort key — an **item collection**. Efficient operations are a `GetItem` by full key, or a `Query` for one partition key with a condition on the sort key (equals, range, begins-with). Anything else is a `Scan`, which reads the whole table and is almost always the wrong answer in production.
+**The data model.** Each item has a **partition key**, hashed to choose a partition, and optionally a **sort key**, which orders items sharing a partition key into an **item collection**. Efficient operations are `GetItem` by full key and `Query` on one partition key with a sort-key condition. Everything else is a `Scan` of the whole table.
 
 ```text
 PK                 SK                         attributes
@@ -278,66 +250,60 @@ CUSTOMER#42        ORDER#2026-10-29#a7d2      total, status, ...
 CUSTOMER#77        PROFILE                    ...
 ```
 
-This is the one place in DynamoDB where the item layout is something you design: items sharing a partition key are stored together and sorted by sort key, so a `Query` within one partition key reads a contiguous range. What DynamoDB does on disk beneath that, AWS doesn't document in the detail Postgres does, so this post doesn't guess.
-
 ![The partition key CUSTOMER#42 is hashed to choose partition 2. Inside it, the item collection for CUSTOMER#42 is sorted by sort key: PROFILE, then two ORDER# items. A Query with begins_with(SK, 'ORDER#') reads the two order items as one contiguous range](dynamo-item-collection.svg)
 
-"A customer and their orders, newest first" is now a single `Query` on `PK = CUSTOMER#42 AND begins_with(SK, 'ORDER#')`, in reverse sort order. This is **single-table design**: several entity types share one table, with key prefixes chosen so that each access pattern is one query. It's efficient, and its costs are real. The table is incomprehensible without the access-pattern document that produced it, and adding a pattern the keys didn't anticipate can mean a data migration.
+"A customer and their orders, newest first" is one `Query`: `PK = CUSTOMER#42 AND begins_with(SK, 'ORDER#')`, reversed. This is **single-table design** — entity types sharing a table, with key prefixes chosen so each access pattern is one query. It's efficient, but the table is unreadable without the access-pattern list behind it, and a pattern the keys didn't anticipate can mean a migration.
 
-**Secondary indexes** add access patterns. A **global secondary index** has its own partition and sort key and is maintained asynchronously, so reads from it are always eventually consistent.[^dynamoconsistency] A **local secondary index** shares the table's partition key with a different sort key; it must be created with the table, and it caps each item collection at 10GB.[^dynamolimits] Defaults are 20 GSIs and 5 LSIs per table.[^dynamoquotas]
+**Secondary indexes** add access patterns. A **global secondary index** has its own keys and is updated asynchronously, so its reads are eventually consistent.[^dynamoconsistency] A **local secondary index** shares the partition key with a different sort key, must be created with the table, and caps each item collection at 10GB.[^dynamolimits] Defaults: 20 GSIs, 5 LSIs.[^dynamoquotas]
 
 **Limits that shape design:**
 
-- An item is at most **400KB**, attribute names included.[^dynamolimits] Large blobs belong in S3, with a pointer in the item.
-- `Query` and `Scan` return at most **1MB per call**, paginated with `LastEvaluatedKey`.[^dynamolimits]
-- A transaction can include at most **100 items and 4MB**, within one account and region. On global tables, other regions can observe a partially applied transaction while it replicates.[^dynamolimits]
-- Each partition is designed to deliver up to **3,000 read units and 1,000 write units per second**.[^dynamopartition]
+- Items are at most **400KB**, attribute names included; blobs go in S3.[^dynamolimits]
+- `Query` and `Scan` return at most **1MB per call**, paginated.[^dynamolimits]
+- Transactions cover at most **100 items and 4MB** in one region; global tables can expose a partly replicated transaction elsewhere.[^dynamolimits]
+- Each partition delivers up to **3,000 read and 1,000 write units per second**.[^dynamopartition]
 
-**Hot partitions** follow from that last point. Throughput is spread across partitions, and a key that attracts disproportionate traffic — one celebrity user, one popular product, or a date as the partition key so that today's traffic all lands in one place — can throttle while the rest of the table idles. **Adaptive capacity** shifts throughput to hot partitions automatically and can even isolate a single heavily used item onto its own partition, but it can't take one key past the per-partition maximum.[^dynamoadaptive] If one key genuinely needs more, the answer is write sharding: suffix the key with a number from a known range — random, or computed from something you'll query by — so writes spread across partitions, at the cost of querying every suffix and merging the results to read it all back.[^dynamosharding]
+**Hot partitions** follow from that last limit: one key with outsized traffic — a celebrity, a popular product, today's date — throttles while the table idles. **Adaptive capacity** shifts throughput and can isolate a hot item, but can't lift one key past the partition maximum.[^dynamoadaptive] Beyond that, **write sharding** spreads a key across suffixes, at the cost of querying and merging every suffix to read it back.[^dynamosharding]
 
-**Consistency.** Within a region, reads are eventually consistent by default. Strongly consistent reads are available on tables and LSIs (not GSIs) and cost twice as much.[^dynamoconsistency] Transactional reads and writes cost double the units of their non-transactional versions.[^dynamolimits] Across regions, **global tables** replicate a table to several regions, writable in all of them, in one of two modes: multi-Region eventual consistency (the default, typically replicating within a second) or multi-Region strong consistency, where a write is synchronously replicated to another region before it returns and strongly consistent reads in any replica see the latest version.[^dynamoconsistency]
+**Consistency.** In-region reads are eventually consistent by default; strong reads work on tables and LSIs, not GSIs, at twice the cost, and transactional operations cost double.[^dynamoconsistency][^dynamolimits] **Global tables** replicate to several writable regions with eventual consistency (typically within a second) or multi-Region strong consistency, where writes replicate synchronously before returning.[^dynamoconsistency]
 
-**Capacity modes.** On-demand is pay-per-request with no capacity planning, and AWS now recommends it as the default for most workloads. Provisioned bills for the capacity you set, used or not, and fits steady, forecastable load.[^dynamocapacity]
+**Capacity.** On-demand is pay-per-request and AWS's recommended default; provisioned suits steady, forecastable load.[^dynamocapacity]
 
-**TTL and Streams.** Set a numeric expiry attribute and DynamoDB deletes expired items — without consuming write throughput, but only "within a few days" of expiry, so reads must filter out items that have expired but not yet been deleted.[^dynamottl] **Streams** record a time-ordered sequence of item-level changes, retained for 24 hours, which is how you feed other systems — search indexes, analytics, aggregates — without dual writes.[^dynamostreams]
+**TTL and Streams.** Expired items are deleted free, but only "within a few days," so reads must filter them.[^dynamottl] **Streams** record item changes for 24 hours, feeding other systems without dual writes.[^dynamostreams]
 
-The way DynamoDB fails is specific and worth naming. The system runs beautifully for its designed access patterns, and then someone needs a query the keys don't support — "all orders over £500 last month across all customers." The options are a full scan, a new GSI (and its write cost), or exporting to a system that can answer ad-hoc questions. **DynamoDB is excellent when the questions are fixed. It's the wrong home for questions that aren't.**
+DynamoDB fails in a specific way: it runs beautifully until someone needs a query the keys don't support — "all orders over £500 last month." Then it's a full scan, a new GSI, or an export. **DynamoDB is excellent when the questions are fixed and the wrong home for questions that aren't.**
 
 ## Azure Cosmos DB: partitioning, RUs, and five consistency levels
 
-Cosmos DB is Azure's globally distributed multi-model database. Its core is a partitioned document store, and it overlaps with DynamoDB heavily: data is partitioned by a key you choose, single-partition operations are fast and predictable, and cross-partition work is expensive. The differences are in the cost model, the indexing defaults, and especially consistency.
+Cosmos DB is Azure's globally distributed database, at its core a partitioned document store. It overlaps heavily with DynamoDB — key-partitioned data, cheap single-partition operations, expensive cross-partition work — and differs in cost model, indexing and consistency.
 
-**Request Units.** Every operation is charged in RUs, a normalised currency covering CPU, I/O and memory. A point read of a roughly 1KB item by ID and partition key costs about 1 RU; writes, queries and larger items cost more, and the same operation on the same data always costs the same.[^ru] You either provision RU/s (in increments of 100, or with autoscale) or use serverless and pay per RU consumed.[^ru] Provisioned RUs are provisioned in *every* region the account is replicated to.[^ru] Because a query's RU charge is returned in a response header, it's practical to measure the cost of each access pattern directly while designing.
+**Request Units.** Every operation costs RUs, a normalised currency for CPU, I/O and memory: about 1 RU for a 1KB point read, more for writes and queries, and always the same for the same operation.[^ru] Throughput is provisioned (in 100 RU/s steps, or autoscale, in every replicated region) or serverless.[^ru] Each response reports its RU charge, so you can measure every access pattern while designing.
 
-**Partitioning.** Items with the same partition key value form a **logical partition**, which can hold up to 20GB. Logical partitions are mapped onto **physical partitions** that Cosmos manages, each serving up to 10,000 RU/s and 50GB.[^partitioning] So a single partition key value is limited to 10,000 RU/s — the same hot-key problem as DynamoDB. The partition key can't be changed in place after the container is created, and a partition key value on an item is immutable.[^partitioning] **Hierarchical partition keys**, up to three levels, address the 20GB limit for keys that genuinely grow large.[^partitioning]
+**Partitioning.** Items sharing a partition key value form a **logical partition** of up to 20GB, mapped onto **physical partitions** of up to 10,000 RU/s and 50GB — so one key value is capped at 10,000 RU/s, the same hot-key problem as DynamoDB.[^partitioning] Partition keys can't be changed in place; **hierarchical keys** (up to three levels) ease the 20GB limit.[^partitioning] The logical partition is also the **transaction boundary**, and a query without the partition key fans out to every physical partition at an extra 2–3 RU each.[^partitioning]
 
-The logical partition is also the **transaction boundary**: multi-item transactions (transactional batches, stored procedures) work only within one logical partition.[^partitioning] A query that doesn't specify the partition key fans out to every physical partition, at an extra 2–3 RU per partition on top of the work itself.[^partitioning]
+**Indexing.** Unlike DynamoDB, Cosmos indexes **every property by default**, so ad-hoc filters just work. Writes pay for it, and excluding never-queried paths is one of the best cost optimisations.[^indexpolicy] **Composite indexes** are required for multi-property `ORDER BY` (same paths in the same order, with all directions matching or all reversed) and help filters when ordered equality-first, range-last.[^indexpolicy]
 
-**Indexing.** This is a real difference from DynamoDB. By default Cosmos indexes **every property of every item**, so ad-hoc filters on any field work without designing for them.[^indexpolicy] The cost is paid on writes: each indexed property adds RUs to every insert and update, and with everything indexed the index can be larger than the data. For write-heavy containers, excluding paths you never query is one of the most effective cost optimisations.[^indexpolicy]
+**Consistency.** Five levels, strongest first:[^consistency]
 
-**Composite indexes** follow two different rules, depending on what they're for.[^indexpolicy] A query that `ORDER BY`s two or more properties *requires* one, and its paths must match the `ORDER BY` exactly — same properties, same sequence, and the same direction on every path (or the opposite direction on every path). A composite index built to speed up *filters* follows the B-tree's leftmost-prefix logic instead: equality properties first, then at most one range property, last. A query that does both needs an index satisfying both, which usually means adding the filtered properties to the front of the `ORDER BY`.
-
-**Consistency.** Most distributed databases offer strong or eventual. Cosmos offers five levels, strongest to weakest:[^consistency]
-
-- **Strong** — linearizable: reads always return the latest committed write. Writes must commit in every region, so cross-region write latency is roughly twice the round trip between the farthest regions. Not available with multiple write regions.
+- **Strong** — linearizable. Writes commit in every region, so write latency is about twice the round trip between the two farthest regions; unavailable with multiple write regions.
 - **Bounded staleness** — reads lag by at most *K* versions or *T* time.
-- **Session** — read-your-writes and write-follows-reads within a client session, via a session token. The most widely used level.
-- **Consistent prefix** — you may see old data, but never writes out of order; a transactional batch is seen whole or not at all.
+- **Session** — read-your-writes within a client session. The most used level.
+- **Consistent prefix** — possibly stale, never out of order.
 - **Eventual** — no ordering guarantee.
 
-The cost differs too. Strong and bounded staleness read from two replicas instead of one, so reads cost roughly twice the RUs.[^consistency] **Session is usually the right answer for user-facing applications**: users see their own changes immediately, other users see them shortly after, and you pay single-replica prices.
+Strong and bounded staleness read two replicas, so reads cost about double.[^consistency] **Session is usually right for user-facing apps**: users see their own changes immediately, at single-replica prices.
 
-**Multi-region writes.** Cosmos can accept writes in every region, as DynamoDB's eventually consistent global tables also do. Concurrent writes to the same item in different regions then conflict, and by default **last writer wins** on the system timestamp, with a deleted version always beating an insert or replace. A custom merge stored procedure is possible on the NoSQL API.[^conflicts] "Last writer wins" means some concurrent writes are silently discarded, so multi-region writes suit data where that's acceptable, or where each item is effectively written from one region at a time.
+**Multi-region writes.** Concurrent writes to one item in different regions conflict, and by default **last writer wins** on the timestamp, with deletes winning; the NoSQL API supports custom merge procedures.[^conflicts] Some concurrent writes are silently discarded, so this suits data where that's acceptable or each item is written from one region at a time.
 
-**Change feed.** Every container has a change feed: inserts and updates in modification order, ordered within each partition key but not across them. The default "latest version" mode doesn't capture deletes; "all versions and deletes" mode does, but requires continuous backup.[^changefeed] It plays the role of DynamoDB Streams or Postgres logical decoding.
+**Change feed.** Inserts and updates, ordered per partition key; "all versions and deletes" mode captures deletes but needs continuous backup.[^changefeed] It's the counterpart of DynamoDB Streams and logical decoding.
 
-**The multiple APIs.** Cosmos exposes wire-compatible APIs for MongoDB, Cassandra, Gremlin and Table alongside its native NoSQL API.[^ru] This makes it easier to move an existing application, and the underlying partitioning, RU and consistency model still apply whichever API you use. The Mongo API on Cosmos is Cosmos with a Mongo-shaped interface, not MongoDB.
+Cosmos also offers MongoDB, Cassandra, Gremlin and Table APIs alongside its native one, but the partitioning, RU and consistency model apply underneath whichever you use.[^ru]
 
-**Cosmos vs DynamoDB**, briefly. They're more alike than different. Cosmos indexes everything by default and gives you a SQL-like query language over documents, so it tolerates ad-hoc queries better. Its consistency model is more granular — five levels, chosen per account and overridable per request — where DynamoDB offers eventual or strong reads within a region and an eventual or strong mode for global tables. DynamoDB pushes harder toward designing every access pattern into keys, and its cost model is simpler to reason about. In practice the choice is mostly made by which cloud you're on.
+**Cosmos vs DynamoDB.** They're more alike than different. Cosmos tolerates ad-hoc queries better, through default indexing and a SQL-like language, and has finer consistency control. DynamoDB pushes harder toward designing every access pattern into keys and has a simpler cost model. Usually the cloud you're on decides.
 
 ## Trade-offs side by side
 
-| | Postgres | SQL Server / MySQL InnoDB | MongoDB | ClickHouse | DynamoDB | Cosmos DB |
+| | Postgres | SQL Server / MySQL InnoDB | MongoDB[^wiredtiger][^mongotx] | ClickHouse | DynamoDB | Cosmos DB |
 |---|---|---|---|---|---|---|
 | **Storage structure** | Row pages in an unordered heap; B-tree indexes | Row pages in a clustered B-tree (or a heap, in SQL Server, without one) | Documents in the WiredTiger engine | Immutable columnar parts, merged in background | Partitioned item collections, sorted by sort key | Partitioned documents |
 | **Indexing** | You choose; many index types | You choose | You choose | Sparse primary index on the sort key | Primary key plus GSIs/LSIs you design | Every property by default; tune by exclusion |
@@ -347,29 +313,27 @@ The cost differs too. Strong and bounded staleness read from two replicas instea
 | **Cost model** | Instance size | Instance size | Instance or managed tier | Instance or compute | Per request or provisioned | RU/s or serverless |
 | **Characteristic failure** *(opinion)* | Bad plan or bloat under load; write ceiling | Random-key page splits; wide primary keys | Unbounded documents; schema drift | Treating it as OLTP | A query the keys don't support | Hot or oversized partition; RU bill |
 
-Every row except the last summarises a sourced section above, plus MongoDB's storage-engine and transaction documentation for its column.[^wiredtiger][^mongotx] The last row is my judgement of how each one most often goes wrong.
-
 ## Polyglot persistence, and when not to
 
-The scenarios below don't all land on one database, and a real system often uses more than one. The standard pairing is a transactional store as the source of truth and an analytical store fed from it: Postgres to ClickHouse via logical decoding, DynamoDB to an analytics store via Streams, Cosmos via the change feed.[^logical][^dynamostreams][^changefeed] The rule from the [API post]({{< relref "designing-an-api-that-survives-failure.md" >}}) applies directly: never write to two stores from application code and hope both succeed. Write to one, and propagate from its log — CDC or an outbox — so that a crash between the two writes can't silently lose data.
+Real systems often pair a transactional source of truth with an analytical store fed from its log: Postgres to ClickHouse via logical decoding, DynamoDB via Streams, Cosmos via the change feed.[^logical][^dynamostreams][^changefeed] Never write to both from application code and hope both succeed; write to one and propagate from its log, as the [API post]({{< relref "designing-an-api-that-survives-failure.md" >}}) describes.
 
-But every extra store is another system to run, monitor, secure, back up, and understand, and another consistency boundary between your own data. The usual mistake isn't too few databases. It's adding a second one before the first has actually run out. Postgres with `jsonb`, partial indexes and a read replica covers far more ground than it gets credit for.
+But every store is another system to run, secure, back up and understand, and another consistency boundary. The usual mistake isn't too few databases; it's adding a second before the first has run out. Postgres with `jsonb`, partial indexes and a read replica covers far more than it gets credit for.
 
 **Use one database until a specific workload forces a second, and be able to name the workload.**
 
 ## Where this leaves the scenarios
 
-**A. Orders and payments → Postgres.** The deciding questions are *what must be atomic* (an order, its lines and its payment, together) and *are queries known in advance* (no — finance will invent new ones). That's the relational sweet spot: transactions across rows, constraints enforced by the database (including the unique constraint that makes idempotency work), and a planner for ad-hoc reporting. Design notes: identity or UUIDv7 keys, so inserts stay at the right edge of the index; composite indexes such as `(customer_id, created_at)` for the known hot paths; and keep heavy analytics off the primary — a read replica first, an analytical store once that isn't enough. What's given up: horizontal write scaling, which this workload almost never needs.
+**A. Orders and payments → Postgres.** The deciding questions are *what must be atomic* (order, lines and payment together) and *are queries known* (no — finance will invent them). That's the relational sweet spot: multi-row transactions, database-enforced constraints (including the unique constraint behind idempotency), and a planner for ad-hoc reports. Use identity or UUIDv7 keys, composite indexes like `(customer_id, created_at)` for hot paths, and keep analytics off the primary — a replica first, an analytical store later. Given up: horizontal write scaling, which this workload rarely needs.
 
-**B. Product telemetry → ClickHouse (or a managed warehouse).** The deciding question is *point lookups or scans* — this is all scans and aggregates, over append-only data that's never edited. Columnar storage and compression are the only way this is cheap. Design notes: `ORDER BY (country, event_time)`, because the stated query filters by country and a date range; if a second query pattern — say, by event type — becomes just as important, that's a case for a projection or a second table sorted for it, not for a compromise key that serves neither. `PARTITION BY` month, so old data can be dropped a partition at a time; inserts batched in the tens of thousands of rows. What's given up: updates, uniqueness and point lookups — none of which this workload needs. If it has to stay in Postgres for now, a BRIN index on the timestamp and monthly partitions go a surprisingly long way.
+**B. Product telemetry → ClickHouse (or a managed warehouse).** It's all scans and aggregates over append-only data, where columnar storage and compression are the only cheap option. `ORDER BY (country, event_time)` to match the query, a second sorted table or projection if another pattern becomes as important, monthly partitions so old data drops cheaply, and inserts batched in the tens of thousands. Given up: updates, uniqueness and point lookups. If it must stay in Postgres for now, BRIN on the timestamp plus monthly partitions go a long way.
 
-**C. Sessions and carts → DynamoDB (or Cosmos DB on Azure).** The deciding questions are *known access patterns* (get and put by session ID — that's all), *latency* and *TTL*. Partition key `SESSION#<id>`, no sort key needed, a TTL attribute for expiry, on-demand capacity for spiky traffic. Session IDs are random and high-cardinality, so there are no hot partitions. What's given up: any query other than by key, and that's acceptable here. Remember that TTL deletion can lag by days, so check expiry on read. (A cache such as Redis is also reasonable if losing a session is acceptable; a cart usually isn't.)
+**C. Sessions and carts → DynamoDB (or Cosmos DB on Azure).** Known access pattern (by session ID), tight latency, TTL. Partition key `SESSION#<id>`, a TTL attribute, on-demand capacity. Random high-cardinality IDs mean no hot partitions. Check expiry on read, since TTL deletion lags. (Redis works too if losing a session is acceptable; losing a cart usually isn't.)
 
-**D. Global profile and catalogue → Cosmos DB with multi-region writes and session consistency.** The deciding question is *where are the users*, combined with *how consistent must reads be*: local latency everywhere, users must see their own updates, slight staleness for others is fine. That's session consistency almost word for word. Partition the profile container by user ID — high cardinality, matches the access pattern, and a user's data stays in one transactional partition. Partition the catalogue by product ID: it's high-cardinality and even, where a category ID would be the low-cardinality key the partitioning section warns about — one popular category becomes a hot partition, and a large one hits the 20GB logical-partition limit, with no way to change the key in place. If browsing by category matters, a hierarchical key (category, then product) or a global secondary index serves it without making category the whole key. Exclude index paths that are never queried. What's given up: global strong consistency, and concurrent cross-region edits to the same item resolve by last writer wins. Design for that — for example, by making profile edits per-field rather than whole-document replaces. (On AWS, DynamoDB global tables in their default eventually consistent mode are the equivalent; their strongly consistent mode trades away the local write latency that this scenario is about.)
+**D. Global profile and catalogue → Cosmos DB, multi-region writes, session consistency.** Local latency everywhere and users seeing their own updates is session consistency almost word for word. Partition profiles by user ID and the catalogue by product ID; category ID would be a low-cardinality key, giving a hot partition and a 20GB ceiling with no way to change it in place. Serve category browsing with a Cosmos global secondary index — a copy of the container partitioned by category, kept eventually consistent with the source.[^partitioning] Exclude unqueried index paths. Given up: global strong consistency, with concurrent cross-region edits resolved by last writer wins — so make profile edits per-field, not whole-document replaces. (On AWS, global tables in eventual mode are the equivalent; strong mode gives up the local write latency this scenario needs.)
 
-**E. CMS content → Postgres with `jsonb`.** The pull toward a document database is real: the content is document-shaped and varies in structure. But the shared parts — authors, tags, publication state, slugs — are relational, the read volume is modest and very cacheable, and editors will want to search and filter in ways nobody has listed. Store the variable body as `jsonb`, keep the common fields as real columns, and add a GIN index if you query into the document. What's given up: nothing that matters at this scale. This one is here because "the data looks like documents" is not, by itself, a reason to choose a document database.
+**E. CMS content → Postgres with `jsonb`.** The content looks like documents, but authors, tags, state and slugs are relational, reads are modest and cacheable, and editors will filter in unplanned ways. Keep common fields as columns, the variable body as `jsonb`, and add a GIN index if you query into it. "The data looks like documents" isn't on its own a reason to choose a document database.
 
-The general method, once more: **describe the data and its requirements first, then let those choose the store** — and when you do choose, know which trade you've made, because every one of these systems is fast at something precisely because it's slow at something else.
+The method, once more: **describe the data and its requirements first, then let them choose the store** — and know which trade you made, because each of these systems is fast at something precisely because it's slow at something else.
 
 [^jsonb]: PostgreSQL, ["JSON Types"](https://www.postgresql.org/docs/current/datatype-json.html) and ["Index Types"](https://www.postgresql.org/docs/current/indexes-types.html) — `jsonb` storage and GIN indexing of `jsonb` containment.
 [^pagelayout]: PostgreSQL, ["Database Page Layout"](https://www.postgresql.org/docs/current/storage-page-layout.html) — 8KB default pages, the page header, line pointers, the 23-byte tuple header and `t_xmin`/`t_xmax`/`t_ctid`.
@@ -397,7 +361,7 @@ The general method, once more: **describe the data and its requirements first, t
 [^dynamoconsistency]: AWS, ["DynamoDB read consistency"](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html) — eventual by default, strong reads on tables and LSIs only, at twice the cost.
 [^dynamottl]: AWS, ["Using time to live (TTL) in DynamoDB"](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/howitworks-ttl.html) — deletion typically within a few days of expiry, without consuming write throughput.
 [^ru]: Microsoft, ["Request Units in Azure Cosmos DB"](https://learn.microsoft.com/en-us/azure/cosmos-db/request-units) — the 1 RU point read, throughput modes, per-region provisioning, and the supported APIs.
-[^partitioning]: Microsoft, ["Partitioning and horizontal scaling in Azure Cosmos DB"](https://learn.microsoft.com/en-us/azure/cosmos-db/partitioning-overview) — 20GB logical partitions, 10,000 RU/s and 50GB physical partitions, immutable partition keys, hierarchical keys, transaction scope, and the cross-partition query cost.
+[^partitioning]: Microsoft, ["Partitioning and horizontal scaling in Azure Cosmos DB"](https://learn.microsoft.com/en-us/azure/cosmos-db/partitioning-overview) — 20GB logical partitions, 10,000 RU/s and 50GB physical partitions, immutable partition keys, hierarchical keys, transaction scope, the cross-partition query cost, and global secondary indexes as eventually consistent copies partitioned differently.
 [^indexpolicy]: Microsoft, ["Indexing policies in Azure Cosmos DB"](https://learn.microsoft.com/en-us/azure/cosmos-db/index-policy) — index-everything by default, excluding paths to reduce write RUs, and composite index rules.
 [^consistency]: Microsoft, ["Consistency levels in Azure Cosmos DB"](https://learn.microsoft.com/en-us/azure/cosmos-db/consistency-levels) — the five levels, strong-consistency write latency, no strong consistency with multiple write regions, and the doubled read cost of strong and bounded staleness.
 [^conflicts]: Microsoft, ["Conflict resolution types and resolution policies"](https://learn.microsoft.com/en-us/azure/cosmos-db/conflict-resolution-policies) — last-writer-wins on `_ts` by default, deletes winning, and custom merge procedures.
