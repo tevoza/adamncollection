@@ -6,15 +6,15 @@ tags: ["software", "security", "tls", "ssl", "certificates", "pki", "mtls", "ope
 description: "Keys, signatures, certificates, chains of trust, the TLS 1.3 handshake, mutual TLS and the OpenSSL commands that go with them, explained for developers who use HTTPS every day and want to know what it's actually doing."
 ---
 
-Most backend developers use TLS every day and think about it only when it breaks. When it does break, the error messages are terse ("unable to get local issuer certificate", "PKIX path building failed", "the remote certificate is invalid according to the validation procedure"), the files have extensions that mean nothing (`.cer`, `.crt`, `.pem`, `.pfx`), and the fix someone finds on Stack Overflow usually turns validation off. (PKIX, in the Java error, is just the name of the internet's X.509 certificate standards.)
+Most backend developers use TLS every day and think about it only when it breaks. When it does break, the error messages are terse ("unable to get local issuer certificate", "PKIX path building failed", "the remote certificate is invalid according to the validation procedure"), the files have extensions that mean nothing (`.cer`, `.crt`, `.pem`, `.pfx`), and the fix someone finds on Stack Overflow usually turns validation off.
 
-This post builds the mental model that makes those errors readable. It starts with what keys and signatures do, moves to what a certificate is and why anyone trusts one, then walks the TLS handshake, mutual TLS, and the OpenSSL commands you'll actually use. It's organised around one realistic job:
+This post builds the mental model that makes those errors readable: keys and signatures, what a certificate is and why anyone trusts one, the TLS handshake, mutual TLS, and the OpenSSL commands you'll actually use. It's organised around one realistic job:
 
 > **The bank integration.** Your payments service is ASP.NET Core in a Linux container. It has to call a bank's payment-initiation API. The bank's onboarding pack contains a sandbox URL, a file called `bank-ca-bundle.pem`, and an instruction: *"Generate a 2048-bit RSA or P-256 key, send us a CSR with CN=payments-client.example.com, and we'll return your client certificate."* A week later you get `client.cer` back. The first call fails with `AuthenticationException: The remote certificate is invalid according to the validation procedure`. A colleague suggests `ServerCertificateCustomValidationCallback = (_, _, _, _) => true`.
 
 Don't take the colleague's suggestion. By the end there's a proper fix, and every file and step in it will make sense.
 
-Like the rest of the software posts, this one is AI-written, so its specific claims (protocol behaviour, defaults, dates and limits) are footnoted against the RFCs and vendor documentation they come from. Every OpenSSL command that runs against local files or a local test server, and every piece of OpenSSL output shown (trimmed where marked with `...`), was run against OpenSSL 3.1.4 on a throwaway CA built for the purpose. The commands aimed at the bank's sandbox weren't run, because that host is fictional. They're the tested commands with a different hostname. Where a statement is reasoning rather than something a source says, the wording says so. Treat an uncited number as an opinion.
+The OpenSSL output shown (trimmed at `...`) comes from OpenSSL 3.1.4 against a throwaway CA. Commands aimed at the bank's sandbox are the same commands with a fictional hostname, so they weren't run.
 
 ## Two problems, two kinds of cryptography
 
@@ -23,50 +23,42 @@ Secure communication between two parties who've never met has to solve two separ
 - **Confidentiality.** Nobody else can read what we're saying.
 - **Authenticity.** I'm talking to who I think I'm talking to, and the message hasn't been altered.
 
-Developers tend to fold these into "encryption", but they're different properties, solved with different operations. A connection that's encrypted but not authenticated is a private conversation with someone who may be an attacker. That's not much use, and it's what you get when you turn certificate validation off.
+Developers tend to fold these into "encryption", but they're different properties, solved with different operations. A connection that's encrypted but not authenticated is a private conversation with someone who may be an attacker, which is what you get when you turn certificate validation off.
 
 ### Symmetric encryption: fast, but needs a shared secret
 
 Symmetric encryption uses **one key** for both encrypting and decrypting. AES and ChaCha20 are the ones you'll meet. In TLS they're used in AEAD modes (AES-GCM, ChaCha20-Poly1305), which encrypt and detect tampering in one step: change a byte of ciphertext and decryption fails rather than returning garbage. TLS 1.3 allows only AEAD ciphers for protecting records.[^tls13records]
 
-Symmetric ciphers are fast, and modern CPUs have AES instructions built in, so bulk encryption costs very little. Their problem is the key. Both sides need the same secret, and if you could send a secret safely over the network you wouldn't need encryption in the first place.
+Symmetric ciphers are fast (modern CPUs have AES instructions built in). Their problem is the key: both sides need the same secret, and if you could send a secret safely over the network you wouldn't need encryption in the first place.
 
 ### Asymmetric cryptography: a key pair
 
 Asymmetric (public-key) cryptography uses a **key pair**: two mathematically linked keys.
 
-- The **public key** can be given to anyone. It goes in certificates, gets emailed around, and is printed in logs.
+- The **public key** can be given to anyone. It goes in certificates and gets emailed around.
 - The **private key** must never leave its owner. Whoever holds it *is* that identity as far as cryptography is concerned.
 
-You can derive the public key from the private key, but not the other way round. That one-way relationship is what makes everything below work.
+You can derive the public key from the private key, but not the other way round.
 
-Asymmetric operations are much slower than symmetric ones, so they're never used for bulk data. In TLS they do two narrow jobs: **agreeing a shared secret** with a stranger over an open network (key exchange, using Diffie–Hellman on elliptic curves, written ECDHE), and **proving identity** (signatures, using RSA, ECDSA or Ed25519). The agreed secret then feeds the fast symmetric cipher. Newer clients increasingly do the key exchange as a hybrid of X25519 and the post-quantum ML-KEM (`X25519MLKEM768`, which OpenSSL 3.5 offers by default), but the shape of the handshake is the same.[^openssl35]
-
-So the answer to "symmetric or asymmetric?" is both. Asymmetric cryptography sets up trust and a shared key, and symmetric encryption carries the traffic.
+Asymmetric operations are much slower, so they're never used for bulk data. In TLS they do two narrow jobs: **agreeing a shared secret** with a stranger over an open network (key exchange, using Diffie–Hellman on elliptic curves, written ECDHE), and **proving identity** (signatures, using RSA, ECDSA or Ed25519). The agreed secret then feeds the fast symmetric cipher. So the answer to "symmetric or asymmetric?" is both. Newer clients increasingly do the key exchange as a hybrid of X25519 and the post-quantum ML-KEM (`X25519MLKEM768`, which OpenSSL 3.5 offers by default), but the shape of the handshake is the same.[^openssl35]
 
 ### Two operations, and which key does what
 
-A key pair supports two operations that are easy to mix up. This is the most important distinction in the post:
+A key pair supports two operations that are easy to mix up, and this is the most important distinction in the post:
 
 ![Two uses of a key pair. Top: Alice encrypts a message with Bob's public key, producing ciphertext that only Bob's private key can decrypt. Bottom: Alice hashes the message with SHA-256 and signs the digest with her private key; Bob re-hashes the message and verifies the signature with Alice's public key](encrypt-vs-sign.svg)
 
 **Encrypting for confidentiality uses the *recipient's* public key.** Anyone can encrypt a message for Bob, because his public key is public. Only Bob can decrypt it, because only he has the private key.
 
-**Signing for authenticity uses the *sender's* private key, and verification uses the sender's public key.** Only Alice can produce a signature that verifies against Alice's public key, so a valid signature proves the message came from whoever holds Alice's private key, and that it hasn't changed since she signed it. Anyone can check it, and nobody can forge it.
+**Signing for authenticity uses the *sender's* private key, and verification uses the sender's public key.** A valid signature proves the message came from whoever holds Alice's private key and hasn't changed since. Anyone can check it, and nobody can forge it.
 
-You'll often hear signing described as "encrypting with the private key". That's a loose description of how textbook RSA happens to work, and it's misleading in general: ECDSA and Ed25519 are signature-only algorithms with no encryption operation at all, and real RSA signatures use padding schemes that make them a separate operation from RSA encryption.[^rfc8017] Think of **sign** and **verify** as their own operations.
+You'll often hear signing described as "encrypting with the private key". That's loosely how textbook RSA works, and misleading in general: ECDSA and Ed25519 are signature-only algorithms with no encryption operation at all, and real RSA signatures use padding schemes that make them a separate operation from RSA encryption.[^rfc8017] Think of **sign** and **verify** as their own operations.
 
 ### Hashing, and why signatures sign a hash
 
-A cryptographic hash function (SHA-256, SHA-384) turns input of any size into a fixed-size **digest**. For it to be useful:
+A cryptographic hash function (SHA-256, SHA-384) turns input of any size into a fixed-size **digest**: the same input always gives the same digest, you can't work back to the input, and you can't find two inputs with the same digest (collision resistance). There's no key and nothing to decrypt; it's a fingerprint, not encryption.
 
-- The same input always gives the same digest.
-- You can't work back from a digest to the input.
-- You can't find two inputs with the same digest (collision resistance), and you can't find a second input that matches a given digest.
-
-A hash isn't encryption: there's no key and nothing to decrypt. It's a fingerprint.
-
-Signatures sign the **digest** of a message, not the message itself. That makes the expensive private-key operation cost the same for a 2KB certificate as for a 2GB file, and collision resistance means a signature over the digest is effectively a signature over the content. It's also why weak hashes are dangerous: once a practical SHA-1 collision was demonstrated in 2017, an attacker who could influence what got signed could prepare two documents with the same digest, get one signed, and reuse the signature on the other.[^shattered] Publicly trusted CAs no longer sign certificates with SHA-1.[^cabbr]
+Signatures sign the **digest** of a message, not the message itself. That makes the private-key operation cost the same for a 2KB certificate as for a 2GB file, and collision resistance makes a signature over the digest effectively a signature over the content. It's also why weak hashes are dangerous: after the first practical SHA-1 collision in 2017, an attacker who could influence what got signed could prepare two documents with the same digest, get one signed, and reuse the signature on the other.[^shattered] Publicly trusted CAs no longer sign certificates with SHA-1.[^cabbr]
 
 One sentence to keep: **the hash says "this exact content", and the private key says "I vouch for it".**
 
@@ -74,7 +66,7 @@ One sentence to keep: **the hash says "this exact content", and the private key 
 
 Signatures leave one problem. To verify that a message came from `api.bank.example`, you need `api.bank.example`'s public key. If you fetch that key over the network, an attacker in the middle can hand you *their* public key instead, and every signature they produce will verify perfectly.
 
-A **certificate** solves this. It's a document that says *"the public key below belongs to `api.bank.example`"*, signed by someone you already trust. That's all it is.
+A **certificate** solves this. It's a document that says *"the public key below belongs to `api.bank.example`"*, signed by someone you already trust.
 
 ### What's actually in one
 
@@ -120,20 +112,20 @@ Certificate:
 Field by field:
 
 - **Subject**: who the certificate is about, as a distinguished name (`CN=`, `O=`, `C=`).
-- **Subject Alternative Name (SAN)**: the names the certificate is actually valid for: DNS names, IP addresses, URIs. For TLS server identity, **this is the field that matters**. Hostname checking uses the SAN, and current rules forbid falling back to the subject's CN.[^rfc9525] Browsers reject a certificate whose only name is in the CN. Some non-browser stacks still fall back to the CN when there's no DNS SAN at all (OpenSSL's hostname check does, unless told not to[^checkhost]), so a CN-only certificate may pass from your backend and then fail in a browser. Don't rely on the fallback.
+- **Subject Alternative Name (SAN)**: the names the certificate is actually valid for: DNS names, IP addresses, URIs. For TLS server identity, **this is the field that matters**: hostname checking uses the SAN, and current rules forbid falling back to the subject's CN.[^rfc9525] Browsers enforce this, but some backend stacks still fall back to the CN when there's no DNS SAN (OpenSSL's hostname check does by default[^checkhost]).
 - **Issuer**: who signed it. It's the Subject of the next certificate up the chain.
-- **Validity**: `Not Before` and `Not After`. Outside that window the certificate is invalid, however good everything else is.
+- **Validity**: `Not Before` and `Not After`. Outside that window the certificate is invalid.
 - **Subject Public Key Info**: the public key. **Only the public key.**
 - **Basic Constraints**: `CA:TRUE` means this certificate may sign other certificates, and `CA:FALSE` means it's an end-entity (leaf). `pathlen` limits how many CAs may sit below it.
-- **Key Usage / Extended Key Usage**: what the key may be used for. `serverAuth` lets a certificate identify a TLS server, and `clientAuth` lets it identify a TLS client. A certificate with no EKU extension at all isn't restricted by it.[^rfc5280eku] A certificate with only `serverAuth` will be rejected when presented as a client certificate. That's a real failure mode, covered in the mTLS section.
+- **Key Usage / Extended Key Usage**: what the key may be used for. `serverAuth` lets a certificate identify a TLS server, and `clientAuth` lets it identify a TLS client. A certificate with no EKU extension isn't restricted by it,[^rfc5280eku] and one with only `serverAuth` is rejected as a client certificate (a real failure mode, covered under mTLS).
 - **Serial number**: unique per issuer, and used for revocation.
 - **Signature**: the issuer's signature over everything above it, made with the **issuer's** private key.
 
 Two consequences:
 
-**A certificate contains a public key, never its private key.** A certificate is public. Servers send theirs to anyone who connects. If you've been given "the certificate" and something is asking you for a private key, the private key is somewhere else: on the machine that generated the CSR, in a key vault, or inside a `.pfx` file. Nobody can recreate it from the certificate. If it's lost, you generate a new key and get a new certificate.
+**A certificate contains a public key, never its private key.** Servers send their certificate to anyone who connects. If you've been given "the certificate" and something asks for a private key, the key is somewhere else: on the machine that generated the CSR, in a key vault, or inside a `.pfx`. Nobody can recreate it from the certificate; if it's lost, you generate a new key and get a new certificate.
 
-**A CA doesn't sign your messages or your traffic.** It signs the certificate once, at issuance, vouching that this public key belongs to this name. After that the CA isn't involved. During a handshake your server proves it holds the private key by signing with it, and the client checks that signature using the public key from the certificate. The CA's signature is only what makes the client believe that public key is really yours.
+**A CA doesn't sign your messages or your traffic.** It signs the certificate once, at issuance, and isn't involved after that. During a handshake your server proves it holds the private key by signing with it, and the client checks that signature with the public key from the certificate. The CA's signature is only what makes the client believe that public key is yours.
 
 ### Certificate Authorities, and why there are two kinds
 
@@ -145,9 +137,9 @@ Your machine trusts a CA because its certificate is in a **trust store**:
 - the Java runtime's own `cacerts` file, which is separate from the OS store;
 - whatever your container base image happens to ship. A slim image with no `ca-certificates` package trusts nothing. On Debian-family images, install the package, and to add a private CA machine-wide, copy its PEM into `/usr/local/share/ca-certificates/` with a `.crt` extension and run `update-ca-certificates`.[^updateca]
 
-The certificates in a trust store are **root CA** certificates. A root certificate is self-signed: its Issuer and Subject are the same, and its signature verifies against its own public key. That proves nothing by itself. A root is trusted because someone (your OS vendor, the JDK maintainers, your platform team) decided to put it in the store, not because of anything in the certificate.
+The certificates in a trust store are **root CA** certificates. A root is self-signed (Issuer and Subject are the same), which proves nothing by itself. It's trusted because someone (your OS vendor, the JDK maintainers, your platform team) put it in the store.
 
-Root private keys are extremely valuable. A compromised root would mean replacing it on billions of devices. So roots sign very little. They sign **intermediate CA** certificates, and the intermediates sign customer certificates every day. Let's Encrypt, for example, keeps its root key material offline and issues every end-entity certificate from intermediates.[^lechain] If an intermediate is compromised, the root revokes it and signs a new one, and no trust store anywhere needs changing.
+A compromised root would mean replacing it on billions of devices, so roots sign very little. They sign **intermediate CA** certificates, and the intermediates sign customer certificates every day. Let's Encrypt, for example, keeps its root key material offline and issues every end-entity certificate from intermediates.[^lechain] If an intermediate is compromised, the CA revokes it with the root key and signs a new one, and no trust store anywhere needs changing.
 
 ### The chain of trust
 
@@ -155,12 +147,12 @@ So a typical server presents not one certificate but a chain:
 
 ![A certificate chain: the leaf for api.bank.example is signed by Issuing CA 1; Issuing CA 1 is signed by Demo Root CA; the root is self-signed and sits in the client's trust store. The server sends the leaf and the intermediate. The client checks each signature with the issuer's public key, then validity dates, CA flags, the SAN against the hostname, key usage, and optionally revocation](chain-of-trust.svg)
 
-Validation works through the chain one link at a time. Each certificate's signature is verified with the public key in its issuer's certificate, until the client reaches a certificate already in its trust store. Along the way it checks validity dates, that every issuer has `CA:TRUE`, path length limits, key usage, and finally that the leaf's SAN matches the hostname it connected to. RFC 5280 specifies the path-validation part, and hostname matching is RFC 9525's.[^rfc5280path][^rfc9525]
+Validation works up the chain one link at a time: each certificate's signature is verified with its issuer's public key, until the client reaches a certificate already in its trust store. Along the way it checks validity dates, that every issuer has `CA:TRUE`, path length limits, key usage, and finally that the leaf's SAN matches the hostname it connected to. RFC 5280 specifies the path-validation part, and hostname matching is RFC 9525's.[^rfc5280path][^rfc9525]
 
 Two practical rules follow:
 
-1. **The server must send its intermediates.** The client has the root but usually not the intermediate. If the server sends only its leaf, the client can't build the chain and you get `unable to get local issuer certificate` (OpenSSL), `PKIX path building failed` (Java), or a `PartialChain` chain status (.NET). Some clients cover for a misconfigured server by caching intermediates or downloading them from the URL in the certificate's Authority Information Access extension.[^rfc5280aia] Browsers do this, and .NET's chain building can too: `X509ChainPolicy.DisableCertificateDownloads` exists to turn it off.[^downloads] So a broken server can work from Chrome and from your .NET service and still fail from Java or curl. The server config should point at a **full chain** file (leaf, then intermediates), not the bare leaf.
-2. **The server needn't send the root.** The client must already have it, and a root that arrives over the wire isn't trusted just because it arrived. Sending it does no harm, but it wastes bytes.
+1. **The server must send its intermediates.** The client has the root but usually not the intermediate. If the server sends only its leaf you get `unable to get local issuer certificate` (OpenSSL), `PKIX path building failed` (Java), or a `PartialChain` status (.NET). Chrome and .NET by default cover for this by downloading the missing intermediate from the certificate's Authority Information Access URL[^rfc5280aia][^downloads] (Firefox uses a preloaded list of known intermediates instead), so a broken server can work from a browser and your .NET service and still fail from Java or curl. .NET reports `PartialChain` only when that download fails, for example from a container with no outbound access. Point the server config at a **full chain** file (leaf, then intermediates).
+2. **The server needn't send the root.** The client must already have it; a root that arrives over the wire isn't trusted because it arrived.
 
 Here's the first rule reproduced with OpenSSL: a leaf verified against the root with and without its intermediate.
 
@@ -174,13 +166,13 @@ $ openssl verify -CAfile root.crt -untrusted int.crt client.crt
 client.crt: OK
 ```
 
-`-untrusted` means "here are intermediates you may use to build the path, but don't trust them as anchors". That's exactly the role intermediates play in a handshake.[^verify]
+`-untrusted` means "intermediates you may use to build the path, but not trust as anchors", which is exactly their role in a handshake.[^verify]
 
 ### Expiry is getting shorter
 
-Every certificate expires, and the maximum lifetime for publicly trusted TLS certificates is shrinking on a fixed schedule. CA/Browser Forum ballot SC-081 reduces it from 398 days to 47 days in stages between March 2026 and March 2029:[^sc081] 200 days from 15 March 2026, 100 days from 15 March 2027, and 47 days from 15 March 2029.[^digicert] The stated aim is that short-lived certificates limit the damage from a mis-issued or compromised certificate, and in practice they force renewal to be automated (ACME, cert-manager, your cloud's managed certificates).
+The maximum lifetime of a publicly trusted TLS certificate is shrinking on a fixed schedule. CA/Browser Forum ballot SC-081 took it from 398 days to 200 days on 15 March 2026, and it drops to 100 days from 15 March 2027 and 47 days from 15 March 2029.[^sc081][^digicert] Short lifetimes limit the damage from a mis-issued or compromised certificate, and in practice force renewal to be automated (ACME, cert-manager, your cloud's managed certificates).
 
-The lesson for a backend team is that **a certificate expiring is an operational event, not a rare surprise.** Monitor expiry, alert well before it, and automate renewal. That applies especially to the certificates nobody automates: client certificates for partner APIs, internal CA certificates, and the cert in a `.pfx` that someone copied onto a VM two years ago. Private and partner CAs aren't bound by the public lifetime rules, so a bank client certificate may still last one or two years, which is long enough for everyone to forget it exists.
+So **certificate expiry is an operational event, not a rare surprise.** Monitor it and automate renewal, especially for the certificates nobody automates: partner client certificates, internal CAs, and the `.pfx` someone copied onto a VM two years ago. Private and partner CAs aren't bound by the public rules, so a bank client certificate may last a year or two, long enough for everyone to forget it exists.
 
 ### Revocation
 
@@ -189,15 +181,15 @@ Sometimes a certificate must be invalidated before it expires, usually because i
 - **CRL (Certificate Revocation List)**: a signed list of revoked serial numbers that the CA publishes at a URL given in the certificate.[^rfc5280]
 - **OCSP (Online Certificate Status Protocol)**: ask the CA's responder about one certificate and get a signed "good" or "revoked" back.[^rfc6960] With **OCSP stapling**, the server fetches that response itself and attaches it to the handshake, so clients don't have to make the call.[^rfc6066]
 
-In practice, revocation on the public web is a weaker mechanism than the textbooks suggest. Online checks add latency and leak browsing data to the CA, and clients often "soft-fail" (carry on if the responder can't be reached). The trend is moving away from OCSP: Let's Encrypt removed OCSP URLs from its certificates in May 2025 and shut its OCSP responders down on 6 August 2025, and now publishes revocation only through CRLs.[^leocsp] Shorter lifetimes are partly a response to the same problem. A certificate that expires in weeks needs revocation less.
+On the public web revocation is weaker than the textbooks suggest: online checks add latency and leak browsing data to the CA, and clients often "soft-fail" when the responder can't be reached. Let's Encrypt shut its OCSP responders down on 6 August 2025 and now publishes revocation only through CRLs,[^leocsp] and shorter lifetimes are partly a response to the same problem.
 
-For your own systems, the practical points are: know whether your client checks revocation at all, and if you run a private CA for mTLS, revocation is your job. Publish a CRL or keep certificates short-lived, or a leaked client key stays valid until it expires. .NET is a good example of how easy it is to get wrong. `HttpClient` doesn't check revocation unless asked (`CertificateRevocationCheckMode` defaults to `NoCheck`), but a hand-built `X509ChainPolicy` defaults to `RevocationMode.Online`. That means a client configured to trust a private CA suddenly needs to reach that CA's CRL or OCSP endpoint, and fails if it can't.[^revocationmode]
+For your own systems: know whether your client checks revocation at all, and if you run a private CA for mTLS, revocation is your job (publish a CRL or keep certificates short-lived). .NET shows how easy this is to get wrong. `HttpClient` doesn't check revocation by default (`CertificateRevocationCheckMode` is `NoCheck`), but a hand-built `X509ChainPolicy` defaults to `RevocationMode.Online`, so a client configured to trust a private CA suddenly needs to reach that CA's CRL or OCSP endpoint, and fails if it can't.[^revocationmode]
 
 ## SSL vs TLS
 
 SSL was Netscape's protocol from the 1990s. It was standardised and renamed **TLS** (Transport Layer Security) in 1999.[^rfc2246] Every version of SSL is now broken and formally prohibited: SSL 2.0 by RFC 6176 and SSL 3.0 by RFC 7568.[^rfc6176][^rfc7568] TLS 1.0 and 1.1 were formally deprecated in 2021 by RFC 8996.[^rfc8996] That leaves **TLS 1.2 and TLS 1.3**. Accept both, prefer 1.3, and treat anything older as a finding in an audit.
 
-The name "SSL" survives everywhere: "SSL certificate", `SslStream`, `javax.net.ssl`, OpenSSL itself, `ssl_certificate` in nginx. None of these mean the obsolete protocol is in use. It's just the old name. And there's no such thing as an "SSL certificate" as opposed to a "TLS certificate". A certificate is an X.509 document, and the same certificate works with any protocol version.
+The name "SSL" survives everywhere (`SslStream`, `javax.net.ssl`, OpenSSL, nginx's `ssl_certificate`) without meaning the obsolete protocol is in use. There's no "SSL certificate" as opposed to a "TLS certificate" either: a certificate is an X.509 document and works with any protocol version.
 
 ## What actually happens in a TLS handshake
 
@@ -212,24 +204,22 @@ Step by step:
 3. **Key agreement.** Each side combines its own ephemeral private key with the other's public key share and gets the same shared secret. Someone watching the network sees both public shares and still can't compute it. That's the Diffie–Hellman property. The secret is run through a key derivation function (HKDF) to produce **handshake keys**.[^rfc8446keys][^rfc5869] From here on, everything is encrypted.
 4. **EncryptedExtensions.** The remaining negotiated settings, such as ALPN (Application-Layer Protocol Negotiation) choosing HTTP/2.
 5. **Certificate.** The server's certificate chain, leaf first.
-6. **CertificateVerify.** A signature, made with the **server's private key**, over a hash of the entire handshake so far.[^rfc8446cv] This is the step that proves the server *holds* the private key for the certificate it just sent. Anyone could replay a copy of `api.bank.example`'s certificate, because it's public. Only the real server can sign this handshake with the matching private key. And because the signature covers both key shares, it also proves no one in the middle swapped them.
+6. **CertificateVerify.** A signature, made with the **server's private key**, over a hash of the entire handshake so far.[^rfc8446cv] This proves the server *holds* the private key for the certificate it just sent: anyone could replay `api.bank.example`'s public certificate, but only the real server can sign this handshake. Because the signature covers both key shares, it also proves no one in the middle swapped them.
 7. **Server Finished.** A MAC (a keyed checksum) over the whole transcript using a key derived from the handshake secret, confirming the server saw the same handshake as the client.
-8. **Client validates.** As the server's messages arrive, the client builds and checks the chain, matches the SAN against the hostname it dialled, and checks CertificateVerify against the leaf's public key. Any failure aborts the connection, and this is where your `AuthenticationException` is thrown.
+8. **Client validates.** As the server's messages arrive, the client builds and checks the chain, matches the SAN against the hostname it dialled, and checks CertificateVerify against the leaf's public key. Any failure aborts the connection; this is where your `AuthenticationException` comes from.
 9. **Client Finished**, and then **application data**, encrypted with symmetric **traffic keys** derived from the same secret, using an AEAD cipher.
 
-Some properties worth understanding:
+**The certificate's key never encrypts anything.** In TLS 1.3 it only *signs*; confidentiality comes entirely from the ephemeral ECDHE exchange. That gives **forward secrecy**: the session keys came from single-use key pairs that were thrown away, so stealing the server's private key next year doesn't decrypt traffic recorded today.
 
-**The certificate's key never encrypts anything.** In TLS 1.3 the server's certificate key only *signs*. Confidentiality comes entirely from the ephemeral ECDHE exchange. That gives **forward secrecy**: the session keys came from single-use key pairs that were thrown away, so stealing the server's private key next year doesn't decrypt traffic recorded today.
-
-**This changed in TLS 1.3.** TLS 1.2 also allowed "RSA key exchange": the client made up a secret, encrypted it with the server certificate's RSA public key, and sent it.[^rfc5246rsa] That's where the folklore "TLS encrypts the session key with the server's public key" comes from. It had no forward secrecy: anyone with the server's private key could decrypt every recorded session. TLS 1.3 removed it, and every public-key key exchange in TLS 1.3 is forward-secret. PSK-only session resumption is the narrow exception.[^rfc8446diff] TLS 1.2 with ECDHE cipher suites is fine. TLS 1.2 with plain RSA key exchange is what you're turning off when you disable "non-PFS ciphers".
+**This changed in TLS 1.3.** TLS 1.2 also allowed "RSA key exchange", where the client encrypted a secret with the server certificate's public key,[^rfc5246rsa] which is where the folklore "TLS encrypts the session key with the server's public key" comes from. Anyone with the server's private key could decrypt every recorded session. TLS 1.3 removed it, so every public-key exchange is forward-secret (PSK-only resumption is the narrow exception).[^rfc8446diff] TLS 1.2 with ECDHE suites is fine; plain RSA key exchange is what "disable non-PFS ciphers" turns off.
 
 **The certificate travels encrypted in 1.3.** In TLS 1.2 the Certificate message, including any *client* certificate in mTLS, went over the wire in the clear. In 1.3 everything after ServerHello is encrypted.[^rfc8446diff]
 
 **It's one round trip.** The client sends its key share before it knows what the server will pick, so a full TLS 1.3 handshake takes one round trip. A full TLS 1.2 handshake took two.[^rfc5246flow]
 
-**Asymmetric is the slow part, and it happens once.** One key agreement and one signature check per connection, then cheap symmetric encryption for every byte after that. This is also why connection reuse matters: a new `HttpClient` per request pays for a fresh handshake every time.
+**Asymmetric is the slow part, and it happens once per connection.** That's why connection reuse matters: a new `HttpClient` per request pays for a fresh handshake every time (and can exhaust sockets).
 
-You can watch a handshake's results with `openssl s_client`. Against a test server on this machine:
+You can watch a handshake's results with `openssl s_client` against a local test server:
 
 ```text
 $ openssl s_client -connect localhost:8443 -CAfile root.crt -brief
@@ -243,11 +233,11 @@ Verification: OK
 Server Temp Key: X25519, 253 bits
 ```
 
-That shows TLS 1.3, AES-256-GCM for the traffic, an ECDSA signature from the server's certificate key, and X25519 as the ephemeral key exchange: each of the pieces above, in one place.[^sclient]
+That's TLS 1.3, AES-256-GCM for the traffic, an ECDSA signature from the server's certificate key, and X25519 as the ephemeral key exchange.[^sclient]
 
 ## Mutual TLS: when the server wants to know who you are
 
-In ordinary HTTPS, **only the server authenticates**. The client checks the server's certificate, and the server has no idea who the client is at the TLS layer. Client identity is handled by the application: an API key, an OAuth token, a session cookie.
+In ordinary HTTPS, **only the server authenticates**. The server doesn't know who the client is at the TLS layer; the application handles that with an API key, an OAuth token or a session cookie.
 
 **Mutual TLS (mTLS)** has both sides present a certificate and prove they hold the private key. In TLS 1.3 it adds three messages to the handshake:
 
@@ -257,9 +247,11 @@ In ordinary HTTPS, **only the server authenticates**. The client checks the serv
 - **Certificate** (client → server): the client's leaf and intermediates.
 - **CertificateVerify** (client → server): a signature over the transcript with the **client's private key**.
 
-The server then does exactly what a client does with a server certificate: builds the chain, checks dates, extended key usage (`clientAuth`), and that the chain ends at a CA *it* trusts for clients. That last part is usually a specific private CA, not the public web roots. Then it maps the certificate's subject or SAN to an identity.
+The server then does what a client does with a server certificate: builds the chain, checks dates and extended key usage (`clientAuth`), and checks that the chain ends at a CA *it* trusts for clients. Then it maps the certificate's subject or SAN to an identity.
 
-The point to take away is that **both parties prove possession of a private key.** Presenting a certificate is not enough, since certificates are public. The CertificateVerify signature is what proves you hold the key, and it's why a client needs both its certificate and its private key, not just the `.cer` the bank sent back.
+The client CA is usually private, not one of the public web roots, and increasingly it has to be: publicly trusted CAs are dropping `clientAuth` because Chrome's root programme now requires separate server and client hierarchies, and Let's Encrypt stopped issuing certificates with it in 2026.[^leclientauth]
+
+**Both parties prove possession of a private key.** Presenting a certificate isn't enough, since certificates are public. The CertificateVerify signature proves you hold the key, which is why a client needs its private key, not just the `.cer` the bank sent back.
 
 ### Where you'll meet it
 
@@ -269,7 +261,7 @@ The point to take away is that **both parties prove possession of a private key.
 
 ### Failures specific to mTLS
 
-**The client sent no certificate.** In TLS 1.3 this is confusing: the client completes its side of the handshake *before* the server has checked the client certificate, so the error often turns up on the first request (typically while reading the response) rather than at connect time. Here's a test server set to require a client certificate, called without one:
+**The client sent no certificate.** In TLS 1.3 the client finishes its side of the handshake *before* the server checks the client certificate, so the error often turns up on the first request rather than at connect time. A test server requiring a client certificate, called without one:
 
 ```text
 $ printf 'GET / HTTP/1.0\r\n\r\n' | openssl s_client -connect localhost:8443 -CAfile root.crt -quiet
@@ -277,11 +269,9 @@ $ printf 'GET / HTTP/1.0\r\n\r\n' | openssl s_client -connect localhost:8443 -CA
 error:0A00045C:SSL routines:ssl3_read_bytes:tlsv13 alert certificate required:...:SSL alert number 116
 ```
 
-`certificate_required` is the alert TLS 1.3 defines for exactly this case.[^rfc8446alert] The same call forced to TLS 1.2 gets a generic `handshake failure` (alert 40), which tells you much less.[^alerts] If your application code reports a "connection reset" or an `IOException` on the *first request* to an mTLS endpoint, suspect this.
+`certificate_required` is the alert TLS 1.3 defines for exactly this case.[^rfc8446alert] Forced to TLS 1.2, the same call gets a generic `handshake failure` (alert 40).[^alerts] If your code reports a "connection reset" or an `IOException` on the *first request* to an mTLS endpoint, suspect this. The usual causes: the certificate was loaded without its private key (loading `client.cer` on its own does exactly this), the key is in a store the process can't read, or the certificate's CA isn't in the server's acceptable list.
 
-The usual causes in .NET or Java: the certificate was loaded without its private key (loading `client.cer` on its own does exactly this), the key is in a store the process can't read, or the client offered a certificate from a CA that isn't in the server's acceptable list.
-
-**The server doesn't trust your certificate's issuer.** You get `unknown ca` (alert 48). Either the server isn't configured with the right client CA, or, more often, you sent your leaf without its intermediate and the server can't chain it to the root it does trust.
+**The server doesn't trust your certificate's issuer.** You get `unknown ca` (alert 48): the server lacks the right client CA, or, more often, you sent your leaf without its intermediate.
 
 **Wrong certificate purpose.** Present a certificate whose EKU says `serverAuth` only, and a strict server rejects it:
 
@@ -292,11 +282,11 @@ error:0A000413:SSL routines:ssl3_read_bytes:sslv3 alert unsupported certificate:
 
 with the server logging `verify error:num=26:unsuitable certificate purpose`. Client certificates need `clientAuth` in their EKU.
 
-**The TLS terminates somewhere else.** If a load balancer, API gateway or Kubernetes ingress terminates TLS, your application never sees the client certificate. The proxy has to perform the mTLS handshake and forward the certificate to the app, typically in a request header, and the app has to trust that header *only* from the proxy, or anyone can forge it. ASP.NET Core supports this with certificate forwarding middleware (`AddCertificateForwarding` / `UseCertificateForwarding`).[^aspnetcertauth]
+**The TLS terminates somewhere else.** If a load balancer, API gateway or ingress terminates TLS, your application never sees the client certificate. The proxy does the mTLS handshake and forwards the certificate in a request header, and the app must trust that header *only* from the proxy, or anyone can forge it. ASP.NET Core supports this with certificate forwarding middleware (`AddCertificateForwarding` / `UseCertificateForwarding`).[^aspnetcertauth]
 
 ### The code, in .NET and Java
 
-**Client side in .NET.** Load the certificate *with* its private key, send its intermediate along with it, and trust the bank's CA for this one client rather than disabling validation:
+**Client side in .NET.** Load the certificate *with* its private key, send its intermediate along with it, and trust the bank's CA for this one client rather than disabling validation. `client.pfx` and `bank-server-root.pem` are built from the bank's files in the walkthrough at the end:
 
 ```csharp
 // client.pfx holds the client cert, its private key and the CA that issued it.
@@ -323,11 +313,11 @@ var handler = new SocketsHttpHandler
 var http = new HttpClient(handler) { BaseAddress = new Uri("https://sandbox.api.bank.example/") };
 ```
 
-`X509CertificateLoader` is the .NET 9+ API for loading certificates and PFX files, and is available for older targets through the `Microsoft.Bcl.Cryptography` package.[^x509loader] It's worth knowing that `LoadPkcs12FromFile` returns only the leaf, and `LoadCertificateFromFile` loads only the *first* certificate in a file. Point it at a multi-certificate bundle and you silently get one CA. Use `X509Certificate2Collection.ImportFromPemFile` for bundles.
+`X509CertificateLoader` is the .NET 9+ API for loading certificates and PFX files, available to older targets through the `Microsoft.Bcl.Cryptography` package.[^x509loader] `LoadPkcs12FromFile` returns only the leaf, and `LoadCertificateFromFile` loads a single certificate, so pointed at a bundle it gives you one CA; use `X509Certificate2Collection.ImportFromPemFile` for bundles.
 
-`ClientCertificateContext` (added in .NET 8) is there so the intermediates actually get sent.[^clientcertctx] In practice, certificates passed through the older `ClientCertificates` property get chained from the certificate stores, not from your PFX, so the intermediate may silently stay behind, and a bank that trusts only its root answers with `unknown ca`. On Windows the TLS handshake runs outside your process, and Microsoft's guidance for *clients* there is that the intermediate has to be in the Windows certificate store.[^sslstreamts] That limitation comes from Windows' TLS stack, so on Linux, where this container runs, the context should be enough. The OpenSSL test in step 6 of the walkthrough below, plus the bank's own logs, are how you confirm it.
+`ClientCertificateContext` (.NET 8+) is there so the intermediates actually get sent.[^clientcertctx] Certificates passed through the older `ClientCertificates` property are chained by the platform, which doesn't see your PFX's other certificates, so the intermediate can silently stay behind and a bank that trusts only its root answers `unknown ca`. On Windows, where the handshake runs outside your process, Microsoft's guidance for clients is that the intermediate must be in the Windows certificate store;[^sslstreamts] on Linux, where this container runs, the context is enough. Step 6 of the walkthrough is how you confirm it.
 
-`CertificateChainPolicy` (available since .NET 7) lets one handler trust a specific root without touching the machine's trust store and without a blanket "accept everything" callback.[^chainpolicy] With `CustomRootTrust`, only the roots you list are trusted for this handler, which for a bank integration is arguably better than the system store anyway. Note the explicit `RevocationMode`: as covered under Revocation, a new `X509ChainPolicy` checks online by default, and a sandbox CA with no reachable CRL fails with `RevocationStatusUnknown`, which looks exactly as if the trust fix didn't work. In a real service, build the handler once (or register it with `IHttpClientFactory`) and keep the PFX password in a secret store.
+`CertificateChainPolicy` (.NET 7+) lets one handler trust a specific root without touching the machine's trust store or using an "accept everything" callback.[^chainpolicy] With `CustomRootTrust`, only the roots you list are trusted, which for a bank integration is arguably better than the system store anyway. The explicit `RevocationMode` matters: a new `X509ChainPolicy` checks online by default, and a sandbox CA with no reachable CRL fails with `RevocationStatusUnknown`, which looks exactly as if the trust fix didn't work. In a real service, build the handler once (or register it with `IHttpClientFactory`) and keep the PFX password in a secret store.
 
 **Server side in ASP.NET Core.** Kestrel asks for the certificate, and the certificate authentication handler validates it:
 
@@ -350,9 +340,9 @@ builder.Services
     });
 ```
 
-Kestrel's own default is to reject, during the handshake, any client certificate that doesn't chain to the machine's trust store. That's every certificate from a private client CA, and the handler never sees them. `AllowAnyClientCertificate()` hands validation to the handler instead, which then has to be the thing that rejects bad certificates, so require authentication on every endpoint (a fallback authorization policy does this).[^kestrelallowany]
+By default Kestrel rejects, during the handshake, any client certificate that doesn't chain to the machine's trust store, which is every certificate from a private client CA. `AllowAnyClientCertificate()` hands validation to the handler instead, which then has to be what rejects bad certificates, so require authentication on every endpoint (a fallback authorization policy does this).[^kestrelallowany]
 
-The handler, in turn, validates client certificates against the *system* trust store by default. `CustomRootTrust` with a `CustomTrustStore` restricts it to your client CA, and the docs note that the custom store must contain every issuing certificate in the chain, including the root, which is why the snippet loads the whole client-CA chain rather than just the root.[^aspnetcertauth] Without that restriction, any client with a publicly trusted certificate would pass chain validation. Your authorization rules would still need to reject them, but you shouldn't rely on that.
+The handler, in turn, validates against the *system* trust store by default, so any client with a publicly trusted certificate would pass chain validation. `CustomRootTrust` restricts it to your client CA; the custom store must contain every issuing certificate including the root, which is why the snippet loads the whole client-CA chain.[^aspnetcertauth]
 
 **Java.** The JDK separates the two roles explicitly: a **keystore** holds *your* certificate and private key, and a **truststore** holds the CAs *you* trust. Both can be PKCS#12 files, and PKCS#12 has been the default keystore type since JDK 9.[^jep229] For a quick setup, the standard system properties are enough:[^jsse]
 
@@ -370,7 +360,7 @@ keytool -importcert -alias bank-server-root -file bank-server-root.pem \
   -keystore bank-truststore.p12 -storetype PKCS12 -storepass changeit -noprompt
 ```
 
-Setting the global `javax.net.ssl.trustStore` *replaces* the JDK's default `cacerts` for the whole process, so every other HTTPS call the service makes will now fail unless those CAs are in your file too. For anything beyond a single-purpose service, build an `SSLContext` for the bank client and leave the defaults alone:
+Setting the global `javax.net.ssl.trustStore` *replaces* the JDK's default `cacerts` for the whole process, so every other HTTPS call the service makes fails unless those CAs are in your file too. Beyond a single-purpose service, build an `SSLContext` for the bank client and leave the defaults alone:
 
 ```java
 var keyStore = KeyStore.getInstance("PKCS12");
@@ -392,19 +382,15 @@ When a Java handshake fails and the exception isn't enough, `-Djavax.net.debug=s
 
 ## OpenSSL: the toolkit
 
-OpenSSL is two things: a C library that implements TLS and the cryptography underneath (used by nginx, curl, Python, Node, Ruby, .NET on Linux and many others), and the `openssl` command-line tool that exposes the same functionality.[^openssl] For a developer, the CLI is the multitool for creating keys and CSRs, inspecting certificates, converting formats, and testing connections.
-
-A Windows note before the commands: in Git Bash, arguments beginning with `/` get rewritten as Windows paths, which breaks `-subj "/CN=..."`. Run with `MSYS_NO_PATHCONV=1` set, or start the subject with `//`.
+OpenSSL is a C library implementing TLS and the cryptography underneath (used by nginx, curl, Python, Node, .NET on Linux and many others), plus the `openssl` command-line tool, the multitool for creating keys and CSRs, inspecting certificates, converting formats and testing connections.[^openssl] On Windows, Git Bash rewrites arguments beginning with `/` as paths, which breaks `-subj "/CN=..."`; set `MSYS_NO_PATHCONV=1` or start the subject with `//`.
 
 ### Keys, CSRs and certificates
 
-Here's how you get a certificate signed by a CA:
-
 ![Getting a certificate. On your machine: 1, generate a private key, which never leaves; 2, create a CSR containing the public key and requested subject and SAN, signed with the private key. Only the CSR goes to the CA, which 3, checks your identity and 4, returns a certificate with the same public key, the subject, its issuer name, and the CA's signature. 5, the certificate and intermediates are deployed together with the private key](csr-flow.svg)
 
-**A CSR (Certificate Signing Request)** is a PKCS#10 document containing your public key and the identity you're asking for, signed with your private key.[^rfc2986] The signature proves to the CA that whoever sent the request holds the matching private key. **The private key never goes to the CA.** If a partner ever asks you to email them a private key, the process is wrong.
+**A CSR (Certificate Signing Request)** is a PKCS#10 document containing your public key and the identity you're asking for, signed with your private key to prove you hold it.[^rfc2986] **The private key never goes to the CA.** If a partner asks you to email them a private key, the process is wrong.
 
-Generate a key. EC P-256 is small and fast. RSA 3072 is the conservative choice when a counterparty insists on RSA, and RSA 2048 is the minimum publicly trusted CAs accept.[^cabbr]
+Generate a key. EC P-256 is small and fast; RSA 3072 is the conservative choice when a counterparty insists on RSA, and 2048 is the minimum publicly trusted CAs accept.[^cabbr]
 
 ```bash
 # EC P-256
@@ -478,7 +464,7 @@ openssl x509 -in cert.pem -noout -fingerprint -sha256
 openssl x509 -in cert.pem -noout -checkend 2592000
 ```
 
-**Does this key match this certificate?** It's the most common question when files have been passed around, and the answer is to compare the public keys. All three must print the same hash:
+**Does this key match this certificate?** Compare the public keys; all three must print the same hash:
 
 ```text
 $ openssl pkey -in client.key -pubout | openssl sha256
@@ -489,7 +475,7 @@ $ openssl x509 -in client.crt -noout -pubkey | openssl sha256
 SHA2-256(stdin)= a5d96762051f12da2008d7400d919ff04af54d48c470d6b698288c6f1e1873e5
 ```
 
-This works for both RSA and EC keys. The older trick of comparing `-modulus` output only works for RSA.
+This works for RSA and EC keys, unlike the older `-modulus` trick.
 
 **What is a server actually sending?** `-showcerts` prints every certificate the server sent:
 
@@ -502,11 +488,13 @@ Certificate chain
 Verify return code: 21 (unable to verify the first certificate)
 ```
 
-One certificate, whose issuer the client doesn't have: that's a server missing its intermediate. A correctly configured server shows the leaf at depth 0 and its issuer at depth 1, with each `i:` matching the next `s:`. Add `-servername host` when connecting by IP or through a tunnel, so the server receives SNI and picks the right certificate. Add `-cert` and `-key` to test an mTLS endpoint with your client certificate before writing any code.[^sclient]
+One certificate whose issuer the client doesn't have: a server missing its intermediate. A correct server shows the leaf at depth 0 and its issuer at depth 1, each `i:` matching the next `s:`. Add `-servername host` when connecting by IP or through a tunnel so the server gets SNI, and `-cert`/`-key` to test an mTLS endpoint before writing any code.[^sclient]
 
 ### File formats, and why the extension tells you nothing
 
 There are really only two **encodings** of a certificate, plus a couple of **container** formats:
+
+![What each file can hold. A .key holds a private key. A .csr holds a public key and the requested name, signed by the private key. A .crt or .cer holds one certificate, with its public key, in PEM or DER. A chain file such as fullchain.pem holds several certificates, leaf first. A .pfx or .p12 is a password-protected container holding a private key, its certificate and usually the chain. A .p7b holds certificates with no private key](file-formats.svg)
 
 | You see | What it actually is |
 |---|---|
@@ -520,7 +508,7 @@ There are really only two **encodings** of a certificate, plus a couple of **con
 | `.jks` | Java's older proprietary keystore format. PKCS#12 replaced it as the default in JDK 9.[^jep229] |
 | `.p7b`, `.p7c` | PKCS#7: certificates (a chain) with **no** private key. Sometimes what a Windows CA hands back. |
 
-A **bundle** or **chain** file is just several PEM certificates concatenated. Order matters for the files a server presents: leaf first, then each issuer in turn (`fullchain.pem` in Let's Encrypt terms). A **CA bundle** given to *clients*, like the bank's `bank-ca-bundle.pem`, is a set of CAs to trust or to use for chain building, and its order doesn't matter. Count what's inside with `grep -c "BEGIN CERTIFICATE" bundle.pem`, and look at each one before assuming which is the root.
+A **bundle** or **chain** file is several PEM certificates concatenated. For the chain a server presents, order matters: leaf first, then each issuer (`fullchain.pem` in Let's Encrypt terms). A **CA bundle** given to clients, like the bank's `bank-ca-bundle.pem`, is a set of CAs to trust or build chains with, and order doesn't matter. Count what's inside with `grep -c "BEGIN CERTIFICATE"`, and look at each before assuming which is the root.
 
 Conversions:
 
@@ -563,60 +551,43 @@ PKCS7 Encrypted data: pbeWithSHA1And40BitRC2-CBC, Iteration 2048
 Shrouded Keybag: pbeWithSHA1And3-KeyTripleDES-CBC, Iteration 2048
 ```
 
-If a consumer says "invalid password" or "unsupported algorithm" for a PFX you know is correct, re-export with `-legacy` for that consumer only. The legacy algorithms are weak, so treat that file as you would the bare key.
+If a consumer says "invalid password" or "unsupported algorithm" for a PFX you know is correct, re-export with `-legacy` for that consumer only, and treat that file like the bare key, since the legacy algorithms are weak.
 
 ## Resolving the bank integration
 
 Back to the scenario, now with all the pieces.
 
-**1. Generate the key and CSR on a machine you control.** The bank asked for `CN=payments-client.example.com`. Add the SAN too, since it costs nothing:
+**1. Generate the key and CSR on a machine you control,** with the commands under [Keys, CSRs and certificates](#keys-csrs-and-certificates). Add the SAN even though the bank only asked for the CN; it costs nothing. Send `client.csr`, and keep `client.key` in a key vault or encrypted secret store: lose it and you go back to the bank for a new certificate.
 
-```bash
-openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out client.key
-openssl req -new -key client.key -out client.csr \
-  -subj "/C=ZA/O=Example Payments Ltd/CN=payments-client.example.com" \
-  -addext "subjectAltName=DNS:payments-client.example.com"
-openssl req -in client.csr -noout -text -verify
-```
+**2. Inspect what comes back.** `openssl x509 -in client.cer -noout -text` (on OpenSSL 1.x, add `-inform DER` for a binary file). Confirm the subject and SAN are what you asked for, `Extended Key Usage` includes `TLS Web Client Authentication`, the dates are sensible, and the public key matches your private key (the three-hash check).
 
-Send `client.csr`. Keep `client.key` somewhere it'll survive: a key vault, or at minimum an encrypted secret store. Lose it and you go back to the bank for a new certificate.
+**3. Work out what's in the CA bundle.** List it with `openssl storeutl -noout -text -certs bank-ca-bundle.pem` and note each certificate's subject and issuer. Typically it holds the CA that issued *your* client certificate (the bank needs your chain to end there) and the CA behind the *bank's server* certificate (you need to trust it), which may or may not be the same. Save them separately; the rest of this walkthrough calls them `bank-client-issuing-ca.pem` and `bank-server-root.pem`.
 
-**2. Inspect what comes back.** `client.cer` may be PEM or DER. OpenSSL 3 usually detects which, and `-inform DER` forces it on older versions:
-
-```bash
-openssl x509 -in client.cer -noout -text
-openssl x509 -in client.cer -inform DER -noout -text     # if the first one can't parse it
-```
-
-Confirm: the subject and SAN are what you asked for, `Extended Key Usage` includes `TLS Web Client Authentication`, the dates are sensible, and the public key matches your private key (the three-hash check above).
-
-**3. Work out what's in the CA bundle.** Split `bank-ca-bundle.pem` by eye or with `openssl storeutl -noout -text -certs bank-ca-bundle.pem`, and note each certificate's subject and issuer. Typically it contains the CA that issued *your* client certificate (the bank needs your chain to end there) and the CA that issued the *bank's server* certificate (you need to trust it). They may or may not be the same CA. Save them as separate files so it's obvious which is which. The rest of this walkthrough calls them `bank-client-issuing-ca.pem` (the intermediate that issued your certificate) and `bank-server-root.pem` (the root behind the bank's server certificate).
-
-**4. Fix the first error, which is about the bank's server, not your certificate.** `The remote certificate is invalid according to the validation procedure` comes from *your* client rejecting the *bank's* sandbox certificate. Sandboxes are frequently issued from a private CA that isn't in any public trust store. Confirm with OpenSSL:
+**4. Fix the first error, which is about the bank's server, not your certificate.** `The remote certificate is invalid according to the validation procedure` is *your* client rejecting the *bank's* sandbox certificate, typically issued from a private CA that isn't in any public trust store. Confirm with OpenSSL:
 
 ```bash
 openssl s_client -connect sandbox.api.bank.example:443 -servername sandbox.api.bank.example -showcerts
 ```
 
-If the chain ends at the bank's private root, the fix is to trust *that root for this client*. That's the `CertificateChainPolicy` with `CustomRootTrust` from the .NET example above. Turning validation off would also make the error go away, and it would make the mTLS pointless: anyone who can intercept the connection could impersonate the bank, and your service would hand them its payment instructions, and any access token it sends, in plaintext.
+If the chain ends at the bank's private root, trust *that root for this client*: the `CertificateChainPolicy` with `CustomRootTrust` from the .NET example. Turning validation off would also make the error go away, and make the encryption pointless: anyone who can intercept the connection could impersonate the bank and read your payment instructions and access tokens.
 
-**5. Build the PFX your service loads.** Combine the key, your certificate and its issuing chain:
+**5. Build the PFX your service loads** from the key, your certificate and its issuing CA:
 
 ```bash
 openssl pkcs12 -export -inkey client.key -in client.cer -certfile bank-client-issuing-ca.pem \
   -name payments-client -out client.pfx
 ```
 
-OpenSSL 3.1 read a DER `client.cer` here as happily as a PEM one. If your version complains, convert it to PEM first with the DER → PEM command above. Load it as in the .NET example above, with the leaf and its intermediate in a `ClientCertificateContext`. If the service was loading `client.cer` on its own, it had no private key, so it sent no client certificate at all. That's the `certificate required` failure, appearing as an I/O error on the first request.
+OpenSSL 3.1 reads a DER `client.cer` here as happily as PEM; on older versions, convert it first. If the service had been loading `client.cer` on its own, it had no private key and sent no client certificate: the `certificate required` failure, surfacing as an I/O error on the first request.
 
-**6. Test outside your code first.** Before touching C#, prove the whole thing works with OpenSSL:
+**6. Test outside your code first:**
 
 ```bash
 openssl s_client -connect sandbox.api.bank.example:443 -servername sandbox.api.bank.example \
   -CAfile bank-server-root.pem -cert client.cer -key client.key -cert_chain bank-client-issuing-ca.pem
 ```
 
-If this connects and verifies but your service doesn't, the problem is in how the service loads or presents the certificate, not the certificates themselves. That halves the search space.
+If this connects and verifies but your service doesn't, the problem is in how the service loads or presents the certificate, not the certificates themselves.
 
 **7. Put the expiry date in a calendar and a monitor.** This client certificate won't renew itself.
 
@@ -688,7 +659,7 @@ openssl pkcs12 -in bundle.pfx -info -noout                                      
 [^cabbr]: CA/Browser Forum, ["Baseline Requirements for TLS Server Certificates"](https://cabforum.org/working-groups/server/baseline-requirements/documents/) — the rules publicly trusted CAs follow, including permitted signature hash algorithms (no SHA-1), minimum RSA modulus of 2048 bits, and the requirement that server certificates carry a subjectAltName.
 [^rfc5280]: IETF, [RFC 5280, "Internet X.509 Public Key Infrastructure Certificate and CRL Profile"](https://www.rfc-editor.org/rfc/rfc5280) — certificate fields, basic constraints, key usage, CRL distribution points and the CRL format.
 [^rfc9525]: IETF, [RFC 9525, "Service Identity in TLS"](https://www.rfc-editor.org/rfc/rfc9525) — "The Common Name RDN MUST NOT be used to identify a service"; identities come from subjectAltName; wildcard rules. Obsoletes RFC 6125.
-[^rfc5280eku]: IETF, [RFC 5280 §4.2.1.12, "Extended Key Usage"](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.12) — `id-kp-serverAuth` and `id-kp-clientAuth`, and that a certificate must be used only for a purpose its EKU allows.
+[^rfc5280eku]: IETF, [RFC 5280 §4.2.1.12, "Extended Key Usage"](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.12) — `id-kp-serverAuth` and `id-kp-clientAuth`; "If the extension is present", the certificate must be used only for a purpose it lists.
 [^lechain]: Let's Encrypt, ["Chains of Trust"](https://letsencrypt.org/certificates/) — "Our root key material is kept safely offline"; end-entity certificates are issued from intermediates.
 [^rfc5280path]: IETF, [RFC 5280 §6, "Certification Path Validation"](https://www.rfc-editor.org/rfc/rfc5280#section-6) — the path validation algorithm: signature, validity, name, basic constraints and path length checks for each certificate up to a trust anchor.
 [^verify]: OpenSSL, ["openssl-verify"](https://docs.openssl.org/3.1/man1/openssl-verify/) — `-CAfile` for trusted certificates and `-untrusted` for intermediates used to build the chain but not trusted as anchors, plus the meaning of verification error codes.
@@ -736,4 +707,5 @@ openssl pkcs12 -in bundle.pfx -info -noout                                      
 [^kestrelallowany]: Microsoft, ["HttpsConnectionAdapterOptions.AllowAnyClientCertificate"](https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.server.kestrel.https.httpsconnectionadapteroptions.allowanyclientcertificate) — "Overrides the current ClientCertificateValidation callback and allows any client certificate." The default when no callback is set, rejecting certificates with any `SslPolicyErrors`, is in Kestrel's [`HttpsConnectionMiddleware`](https://github.com/dotnet/aspnetcore/blob/main/src/Servers/Kestrel/Core/src/Middleware/HttpsConnectionMiddleware.cs) source rather than the docs.
 [^clientcertctx]: Microsoft, ["SslClientAuthenticationOptions.ClientCertificateContext"](https://learn.microsoft.com/en-us/dotnet/api/system.net.security.sslclientauthenticationoptions.clientcertificatecontext) — an `SslStreamCertificateContext` for the client certificate; available from .NET 8.
 [^checkhost]: OpenSSL, ["X509_check_host"](https://docs.openssl.org/3.1/man3/X509_check_host/) — "the default is to use the subject DN when no corresponding subject alternative names are present", unless `X509_CHECK_FLAG_NEVER_CHECK_SUBJECT` is set.
+[^leclientauth]: Let's Encrypt, ["Ending TLS Client Authentication Certificate Support in 2026"](https://letsencrypt.org/2025/05/14/ending-tls-client-authentication/) — prompted by Chrome root programme rules requiring separate client and server authentication hierarchies by June 2026; the Client Authentication EKU dropped from the default profile on 11 February 2026 and from all issuance after 8 July 2026.
 [^downloads]: Microsoft, ["X509ChainPolicy.DisableCertificateDownloads"](https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.x509certificates.x509chainpolicy.disablecertificatedownloads) — whether the chain engine may use the AIA extension to locate unknown issuer certificates; the default is `false`, so downloads are allowed.

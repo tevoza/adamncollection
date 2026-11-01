@@ -3,9 +3,9 @@
   <style>
     text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
     .small { font-size: 12px; }
-    .muted { fill: #9baeca; font-size: 11.5px; }
-    .pub { fill: #7dd3fc; font-size: 11.5px; }
-    .prv { fill: #c084fc; font-size: 11.5px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .pub { fill: #7dd3fc; font-size: 12px; }
+    .prv { fill: #c084fc; font-size: 12px; }
     .region { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
     .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
     .kpub { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }

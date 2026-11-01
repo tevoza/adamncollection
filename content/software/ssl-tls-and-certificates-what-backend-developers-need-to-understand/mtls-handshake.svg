@@ -2,9 +2,9 @@
   <title id="t">TLS 1.3 handshake with client authentication. It is the normal handshake plus three messages: the server sends CertificateRequest listing acceptable CAs, and the client answers with its own Certificate chain and a CertificateVerify signature before its Finished. The server then validates the client's chain against its configured client CAs</title>
   <style>
     text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
-    .muted { fill: #9baeca; font-size: 11.5px; }
+    .muted { fill: #9baeca; font-size: 12px; }
     .new { fill: #c084fc; }
-    .newm { fill: #c084fc; font-size: 11.5px; }
+    .newm { fill: #c084fc; font-size: 12px; }
     .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
     .band { fill: #13233b; stroke: #3a4d6b; stroke-width: 1; stroke-dasharray: 4 3; }
     .bandn { fill: #13233b; stroke: #c084fc; stroke-width: 1; stroke-dasharray: 4 3; }
