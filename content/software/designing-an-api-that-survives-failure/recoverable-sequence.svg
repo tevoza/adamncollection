@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" role="img" aria-labelledby="t">
+  <title id="t">Two orderings of a payment that involves an external provider. Recoverable: write Pending and commit, call the provider with your idempotency key, then record the outcome; a crash after the call leaves a Pending row that a reconciliation job can resolve by asking the provider. Unrecoverable: call the provider first and write afterwards; a crash between the two leaves a charge with no record in your system</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .bad { fill: #fca5a5; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .badbox { fill: #2a1620; stroke: #f87171; stroke-width: 1.5; }
+    .dir { fill: none; stroke: #9baeca; stroke-width: 1.5; }
+    .crash { stroke: #f87171; stroke-width: 2; stroke-dasharray: 4 3; }
+  </style>
+  <defs>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9baeca"/>
+    </marker>
+  </defs>
+  <rect width="800" height="300" fill="#08111f"/>
+
+  <text x="40" y="30">write intent first: recoverable</text>
+  <rect class="hl" x="40" y="44" width="220" height="48" rx="6"/>
+  <text x="150" y="73" text-anchor="middle">1. Pending, commit</text>
+  <path class="dir" d="M260 68 H286" marker-end="url(#m)"/>
+  <rect class="box" x="290" y="44" width="220" height="48" rx="6"/>
+  <text x="400" y="73" text-anchor="middle">2. call with key</text>
+  <path class="dir" d="M510 68 H536" marker-end="url(#m)"/>
+  <rect class="box" x="540" y="44" width="220" height="48" rx="6"/>
+  <text x="650" y="73" text-anchor="middle">3. record outcome</text>
+  <line class="crash" x1="525" y1="38" x2="525" y2="100"/>
+  <text class="bad" x="525" y="116" text-anchor="middle">crash</text>
+  <text class="muted" x="400" y="138" text-anchor="middle">a Pending row remains; reconciliation asks the provider by key</text>
+
+  <text x="40" y="186">call first: unrecoverable</text>
+  <rect class="badbox" x="40" y="200" width="220" height="48" rx="6"/>
+  <text x="150" y="229" text-anchor="middle">1. call provider</text>
+  <path class="dir" d="M260 224 H286" marker-end="url(#m)"/>
+  <rect class="box" x="290" y="200" width="220" height="48" rx="6"/>
+  <text x="400" y="229" text-anchor="middle">2. write record</text>
+  <line class="crash" x1="275" y1="194" x2="275" y2="256"/>
+  <text class="bad" x="275" y="272" text-anchor="middle">crash</text>
+  <text class="bad" x="400" y="292" text-anchor="middle">a charge with no record; nothing knows to look for it</text>
+</svg>
