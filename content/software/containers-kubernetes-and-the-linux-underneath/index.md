@@ -1,6 +1,7 @@
 ---
 title: "Containers, Kubernetes and the Linux Underneath"
 date: 2026-10-31T21:00:00+02:00
+lastmod: 2026-11-01T12:00:00+02:00
 draft: false
 tags: ["software", "docker", "containers", "kubernetes", "helm", "aws", "eks", "ecs", "fargate", "linux", "security", "ai-generated"]
 description: "What a container really is, how images are built, the Linux users, groups, permissions and capabilities that decide whether it runs, and how Kubernetes, Helm, EKS and ECS run it in production. Built around one .NET service and three real failures."
@@ -8,7 +9,7 @@ description: "What a container really is, how images are built, the Linux users,
 
 Most backend developers can write a Dockerfile that works on their laptop. Fewer can say why the same image fails with `Permission denied` the day someone adds `USER` to it, why a Kubernetes pod sits in `CreateContainerConfigError` without ever starting, or why `docker stop` takes exactly ten seconds. All three come down to a small amount of Linux that container tooling hides until it doesn't: processes, user IDs, file modes and capabilities.
 
-This post builds that model from the bottom up. It starts with what a container actually is, moves through images and the Linux permission model, then covers how Kubernetes, Helm, EKS and ECS run the result. It's organised around one job:
+This post builds that model from the bottom up, around one job:
 
 > **The payments API ships.** Your ASP.NET Core payments service (the one that calls the bank over mutual TLS) has to move from a VM to containers on AWS. The platform team's rules are short: images must not run as root, the bank's client key comes from a Kubernetes Secret, and the production namespace enforces the Kubernetes `restricted` security profile. Three things go wrong on the way:
 >
@@ -16,28 +17,26 @@ This post builds that model from the bottom up. It starts with what a container 
 > 2. In the cluster, the service can't read its client key: `Access to the path '/etc/bank/tls.key' is denied.` It's the same image that worked in the dev namespace.
 > 3. When the production namespace switches to `restricted`, a pod for an older build never starts. Its status is `CreateContainerConfigError: container has runAsNonRoot and image has non-numeric user (app), cannot verify user is non-root`.
 
-Each of these is resolved near the end, and by then the fix for each should look obvious.
+Each one gets explained where its mechanism comes up, and the fixes are collected at the end.
 
-Like the rest of the software posts, this one is AI-written, so its specific claims (defaults, limits and how the tools behave) are footnoted against the documentation or source code they come from. The Docker commands and their output were run for real against Docker Engine 24.0.7 on WSL 2 (kernel 6.18), using `alpine:3.22`, the `mcr.microsoft.com/dotnet/aspnet:10.0` image and a small test version of the payments service. The Linux permission demonstrations were run on Ubuntu under WSL. The Kubernetes manifests, Helm chart and AWS configuration were **not** run, because there was no cluster or AWS account to run them against. Where they make a claim about behaviour, the claim is footnoted to the Kubernetes documentation or kubelet source code. Output is trimmed where marked with `...`. Where a statement is reasoning rather than something a source says, the wording says so.
+The Docker and Linux commands below were run for real (Docker Engine 24.0.7 on WSL 2, `alpine:3.22`, `aspnet:10.0` and a small test version of the service), with output trimmed where marked `...`. The Kubernetes, Helm and AWS configuration was **not** run against a cluster, so its behaviour is footnoted to the documentation or source code instead.
 
 ## A container is a process
 
-A container isn't a small virtual machine. It's an ordinary Linux process, started in a way that gives it a restricted view of the machine. There's no guest kernel and no boot. The process makes system calls into the same kernel as every other process on the host.
+A container isn't a small virtual machine. It's an ordinary Linux process with a restricted view of the machine: no guest kernel, no boot, and system calls into the same kernel as every other process on the host.
 
 ![A virtual machine stack compared with a container stack. On the left, a hypervisor runs two VMs, each with its own guest kernel, OS libraries and app. On the right, one Linux kernel runs two containers directly; each is a process tree with its own namespaces, cgroup limits and image filesystem, sharing the host kernel](vm-vs-container.svg)
 
-You can see this from inside one. On this machine the Windows host has no Linux kernel of its own; Docker Desktop runs one in a lightweight WSL 2 VM, and every container reports that same kernel:
+Here Docker runs under WSL 2, whose VM provides the only Linux kernel, and every container reports it:
 
 ```console
 $ docker run --rm alpine:3.22 uname -r
 6.18.54.1-microsoft-standard-WSL2
 ```
 
-The alpine image doesn't ship a kernel. `uname` asked the only kernel there is.
+The alpine image ships no kernel; `uname` asked the only one there is. Two kernel features turn that process into a "container".
 
-Two kernel features turn that ordinary process into a "container".
-
-**Namespaces** decide what the process can *see*. Each namespace type wraps one global resource so that processes inside it get their own isolated instance:[^namespaces]
+**Namespaces** decide what the process can *see*. Each namespace type wraps one global resource so that processes inside it get their own isolated instance. The main ones:[^namespaces]
 
 | Namespace | What it isolates | What it means in practice |
 | --- | --- | --- |
@@ -49,16 +48,16 @@ Two kernel features turn that ordinary process into a "container".
 | `user` | User and group IDs | UID 0 inside can map to an unprivileged UID outside (often **not** used, see below) |
 | `cgroup` | The view of the cgroup tree | The container sees its own cgroup as the root |
 
-**Control groups (cgroups)** decide how much the process can *use*. A cgroup limits and accounts for CPU, memory, I/O and process counts for a group of processes.[^cgroups] When Kubernetes says a container has a 512Mi memory limit, that's a number written into a cgroup file. When the process goes over it, the kernel's OOM killer ends it, not Kubernetes. Modern distributions use cgroup v2, a single unified hierarchy. Docker reports which one the engine uses:
+**Control groups (cgroups)** decide how much the process can *use*. A cgroup limits and accounts for CPU, memory, I/O and process counts for a group of processes.[^cgroups] A Kubernetes memory limit of 512Mi is a number written into a cgroup file, and when the process exceeds it, the kernel's OOM killer ends it, not Kubernetes. Modern distributions use cgroup v2, a single unified hierarchy:
 
 ```console
 $ docker info --format '{{.CgroupVersion}}'
 2
 ```
 
-There's a third ingredient that matters more than the other two for this post: **a container's processes run as ordinary Linux users, with ordinary Linux permissions, on a kernel shared with everything else.** Namespaces change what a process can see. They don't change who it is. Unless user namespaces are switched on (most Docker and Kubernetes setups don't do it by default), UID 0 inside the container *is* UID 0 on the host kernel. The kernel only knows numbers, and 0 is 0.[^userns]
+What matters most for this post: **a container's processes run as ordinary Linux users, with ordinary Linux permissions, on a shared kernel.** Namespaces change what a process can see, not who it is. Unless user namespaces are switched on (most Docker and Kubernetes setups don't do it by default), UID 0 inside the container *is* UID 0 on the host kernel. The kernel only knows numbers, and 0 is 0.[^userns]
 
-That's why "don't run as root" is a real rule, not a style preference. Namespaces, capabilities, seccomp and read-only mounts all make container root weaker than host root, but if any of those layers has a hole, root inside is the starting point an attacker wants.
+That's why "don't run as root" is a real rule, not a style preference. Namespaces, capabilities, seccomp and read-only mounts all make container root weaker than host root, but root inside is still the starting point an attacker wants.
 
 ## Images: layers, digests and the Dockerfile
 
@@ -70,17 +69,17 @@ When the container starts, the runtime stacks the image's read-only layers and a
 
 ![Image layers stacked under a container. Bottom to top: base OS layer (Ubuntu), .NET runtime layer, an app layer with the published DLLs, and a thin writable container layer. A read of /app/Payments.Api.dll falls through to the app layer; a write to /app/data/started.txt lands in the writable layer, which is discarded when the container is removed](image-layers.svg)
 
-Three consequences follow, and all three show up in production:
+Three consequences follow:
 
 - **The writable layer dies with the container.** Anything written there is gone when the container is replaced. State belongs in a volume or an external store.
-- **Deleting in a later layer doesn't shrink the image.** `RUN rm` of a file added by an earlier `COPY` only hides it. The bytes are still in the earlier layer. This is why build tools go in a separate build stage rather than being "cleaned up" later.
+- **Deleting in a later layer doesn't shrink the image.** `RUN rm` of a file added by an earlier `COPY` only hides it; the bytes stay in the earlier layer. That's why build tools go in a separate build stage rather than being "cleaned up" later.
 - **Layers are shared and cached.** Ten services built on the same base image share those base layers on disk and in the registry. The build cache works layer by layer, so instruction order decides how much gets rebuilt.
 
 ### Tags move, digests don't
 
 A tag like `aspnet:10.0` is a mutable pointer. Microsoft moves it every time it publishes a patched image. A **digest** (`sha256:...`) is a content hash of the image manifest, so it can't change without the content changing.[^ocispec] Production manifests should reference images by digest, or by an immutable tag that your pipeline never reuses, so that "redeploy the same version" means the same bytes.
 
-The image ID Docker prints after a build is a hash too, of the config:
+The image ID Docker prints after a build is a hash too. With the classic image store used here it's the config's digest; with the containerd image store, the default on fresh installs from Docker Engine 29, it's the manifest's (or index's).[^containerdstore] Either way it's a local ID. The digest to pin in a deployment is the one `docker push` prints, because that's what the registry resolves.
 
 ```console
 $ docker build -q -t payments:fixed .
@@ -126,14 +125,12 @@ uid=0(root) gid=0(root) groups=0(root)
 app:x:1654:1654::/home/app:/bin/sh
 ```
 
-So `USER $APP_UID` expands at build time to `USER 1654`, and the image's config records the number:
+So `USER $APP_UID` expands at build time to `USER 1654`, and the image's config records the number, which matters in Kubernetes:
 
 ```console
 $ docker image inspect payments:fixed --format '{{.Config.User}}'
 1654
 ```
-
-That number becomes important in Kubernetes.
 
 Then the first run fails:
 
@@ -143,7 +140,7 @@ Unhandled exception. System.UnauthorizedAccessException: Access to the path '/ap
 ...
 ```
 
-The app creates `/app/data` at startup to write a small state file. Understanding why it can't takes the next section.
+The app creates `/app/data` at startup to write a small state file. Why it can't takes the next section.
 
 ## The Linux you actually need
 
@@ -151,7 +148,7 @@ The app creates `/app/data` at startup to write a small state file. Understandin
 
 The kernel doesn't know user names. Every process has a set of numeric IDs, mainly a real and effective **user ID (UID)** and **group ID (GID)**, plus a list of **supplementary groups**.[^credentials] Every file has an owning UID, an owning GID and a set of permission bits. When a process touches a file, the kernel compares numbers.
 
-Names live in `/etc/passwd` and `/etc/group`, which are just text files that tools like `ls`, `id` and `whoami` use to translate numbers for humans. Inside a container, those files come from the **image**, not the host. Run Alpine as a UID it has never heard of and everything still works, it just can't print a name:
+Names live in `/etc/passwd` and `/etc/group`, text files that tools like `ls` and `id` use to translate numbers for humans. Inside a container, those files come from the **image**, not the host. Run Alpine as a UID it has never heard of and everything still works; it just can't print a name:
 
 ```console
 $ docker run --rm --user 1654 alpine:3.22 sh -c 'id; whoami'
@@ -159,9 +156,9 @@ uid=1654 gid=0(root) groups=0(root)
 whoami: unknown uid 1654
 ```
 
-Two things to notice there. First, an unknown UID is fine: there's no requirement for a matching `/etc/passwd` entry. Second, **the GID is 0**. Docker's documentation warns that when the user has no primary group, the container runs with the `root` group.[^dockerfile] Group 0 isn't root *privilege* (privilege comes from UID 0 and capabilities), but files that are group-writable for GID 0 are writable by this process. Some platforms rely on that deliberately, as we'll see. Kubernetes does the same: if you set `runAsUser` but not `runAsGroup`, the primary group is 0.[^k8ssc]
+An unknown UID is fine; nothing requires a matching `/etc/passwd` entry. But notice **the GID is 0**. When the UID has no `/etc/passwd` entry, and so no primary group, Docker and containerd run it with the `root` group,[^dockerfile][^containerduid] and the same happens in Kubernetes when `runAsUser` is set without `runAsGroup`. Group 0 isn't root *privilege* (that comes from UID 0 and capabilities), but files group-writable for GID 0 are writable by this process, which some platforms rely on deliberately.
 
-The same applies to files. On Ubuntu, a file chowned to a UID with no `/etc/passwd` entry shows the bare number:
+Files work the same way. A file chowned to a UID with no `/etc/passwd` entry shows the bare number:
 
 ```console
 # chown 1654:1654 owned && ls -l owned
@@ -170,7 +167,7 @@ The same applies to files. On Ubuntu, a file chowned to a UID with no `/etc/pass
 no passwd entry for 1654
 ```
 
-`ls -ln` (numeric) is the habit to build when debugging containers. Names are resolved against whichever `/etc/passwd` the *reading* process sees, so the same file can show as `app` inside a container and `1654` (or worse, some unrelated user) on the host or in a different image.
+Names are resolved against whichever `/etc/passwd` the *reading* process sees, so the same file can show as `app` in one image and as an unrelated user in another. `ls -ln` is the habit to build.
 
 ![The same numeric UID seen from three places. The container process runs as UID 1654, which the image's /etc/passwd calls "app". A file it writes into a volume is stored on disk with owner 1654. On the host, /etc/passwd has no 1654, so ls shows the number; another image might map 1654 to a different name entirely. Only the number is real](uid-mapping.svg)
 
@@ -178,13 +175,13 @@ no passwd entry for 1654
 
 Each file has three sets of three bits: **owner**, **group** and **other**, each with **r**ead, **w**rite and e**x**ecute. In octal, r=4, w=2, x=1, so `640` means owner `rw-`, group `r--`, other `---`.
 
-For directories, the bits mean something slightly different, and this is behind a lot of confusing errors:
+On directories the bits mean something different, which is behind a lot of confusing errors:
 
 - **r** on a directory lets you list its names.
 - **w** lets you create, delete and rename entries in it. Creating `/app/data` needs write permission on `/app`, not on anything inside it.
 - **x** lets you *traverse* it: use it in a path to reach something inside.
 
-You can have one without the other. Here, a directory is `744` (other gets `r--`), and a file inside is world-readable and writable. An unprivileged user can't reach the file, because they can't traverse the directory:
+You can have one without the other. With a directory at `744` (other gets `r--`), an unprivileged user can't reach a world-readable file inside, because they can't traverse the directory:
 
 ```console
 # ls -ldn locked
@@ -202,11 +199,11 @@ $ cat locked/file
 hi
 ```
 
-The check itself is simple, and the order matters. The kernel picks exactly **one** of the three bit sets and uses only that one:[^pathres]
+The check itself is simple: the kernel picks exactly **one** of the three bit sets and uses only that one.[^pathres]
 
 ![How the kernel decides whether a process may open a file. If the process has CAP_DAC_OVERRIDE (normally root), the bit check is bypassed. Otherwise: if the process UID equals the file's owner UID, only the owner bits are used. Else if the file's GID is the process's GID or one of its supplementary groups, only the group bits are used. Else the other bits are used. The chosen bits either allow the operation or the result is EACCES, Permission denied. Worked example: UID 1654 trying to create /app/data where /app is owned by 0:0 with mode 755 falls through to the other bits, r-x, which have no w](permission-check.svg)
 
-The selection is first-match. If you *own* a file whose owner bits are `---`, you're denied even if the "other" bits say `rw-`. The other bits are never consulted for the owner.
+Because the selection is first-match, an owner whose owner bits are `---` is denied even when the other bits say `rw-`.
 
 Now the payments failure makes sense. Every file `COPY` puts into an image is owned by UID 0 and GID 0 unless you say otherwise.[^dockerfile] So `/app` is owned by root:
 
@@ -218,7 +215,7 @@ drwxr-xr-x 1 0 0 4096 Oct 31 19:59 /app
 -rw-r--r-- 1 0 0  5632 Oct 31 19:59 Payments.Api.dll
 ```
 
-UID 1654 isn't the owner (0) and isn't in group 0, so the kernel uses the *other* bits of `/app`, `r-x`. There's no `w`, so creating `/app/data` fails. The app files being root-owned and read-only to the app is exactly what you want. The data directory just needs a different owner.
+UID 1654 isn't the owner and isn't in group 0, so the kernel uses the *other* bits of `/app`, `r-x`, and creating `/app/data` fails. Root-owned app files are exactly what you want; only the data directory needs a different owner.
 
 ### umask and the setgid directory
 
@@ -234,7 +231,7 @@ $ umask 0002; touch g; ls -l g | cut -c1-10
 -rw-rw-r--
 ```
 
-That's why a file your app writes into a shared volume often isn't writable by the *next* container to come along with a different UID. It was created `644`.
+That's why a file your app writes into a shared volume often isn't writable by the next container with a different UID: it was created `644`.
 
 The **setgid bit on a directory** (shown as `s` in the group execute position) makes new entries inherit the directory's group instead of the creating process's primary group.[^inode] Combined with group-write permission, it's the standard way to share a directory between several UIDs that share a group:
 
@@ -251,7 +248,7 @@ $ touch shared/b; ls -ln shared
 -rw-r--r-- 1 1654 4000 0 Oct 31 22:01 b
 ```
 
-The new file's group is 4000, taken from the directory. In a plain directory without the setgid bit, the same command produces a file with group 1654. Kubernetes `fsGroup` uses exactly this mechanism on volumes, which is why it's worth knowing.
+The new file's group is 4000, taken from the directory; without the setgid bit it would be 1654. Kubernetes `fsGroup` uses this mechanism on volumes.
 
 ### Root is a bundle of capabilities
 
@@ -300,7 +297,7 @@ CapEff: 0000000000000000
 wrote /etc/x
 ```
 
-With no capabilities at all, UID 0 still wrote to `/etc`, because `/etc` is owned by UID 0 and the owner bits allow it. No override was needed. Dropping capabilities and running as non-root solve different problems, and you want both.
+With no capabilities at all, UID 0 still wrote to `/etc`, because it owns `/etc` and the owner bits allow it. Dropping capabilities and running as non-root solve different problems, and you want both.
 
 One port detail catches people out. Without `CAP_NET_BIND_SERVICE`, a process can't bind ports below `net.ipv4.ip_unprivileged_port_start`, which defaults to 1024. Docker sets that sysctl to `0` inside containers that don't use host networking,[^mobyport] and containerd 2.0 does the same for Kubernetes pods by default (earlier versions didn't).[^containerdports]
 
@@ -309,13 +306,13 @@ $ docker run --rm --user 1654 --cap-drop ALL alpine:3.22 cat /proc/sys/net/ipv4/
 0
 ```
 
-So "my non-root container binds port 80 fine" can be true on one runtime and false on another. The .NET images sidestep the question by defaulting to 8080, and so should your own images.
+So "my non-root container binds port 80 fine" can be true on one runtime and false on another. The .NET images sidestep it by defaulting to 8080, and so should yours.
 
 ### PID 1 and signals
 
 The first process in a PID namespace is PID 1, and PID 1 is special in two ways. The kernel doesn't apply default signal handlers to it, so a `SIGTERM` that would kill a normal process is ignored unless PID 1 has installed a handler. And PID 1 is expected to reap orphaned child processes, or they pile up as zombies.[^pidns]
 
-`docker stop` and Kubernetes both stop a container by sending `SIGTERM`, waiting for a grace period, then sending `SIGKILL`. Docker waits 10 seconds by default; Kubernetes waits 30.[^podlifecycle] An app that gets the `SIGTERM` can finish its in-flight requests and exit cleanly. An app that doesn't gets killed mid-request when the timer runs out.
+`docker stop` and Kubernetes both stop a container by sending `SIGTERM`, waiting for a grace period, then sending `SIGKILL`. Docker waits 10 seconds by default; Kubernetes waits 30.[^podlifecycle] An app that gets the `SIGTERM` can finish in-flight requests and exit cleanly; one that doesn't is killed mid-request.
 
 Which process is PID 1 depends on the form of `ENTRYPOINT`. The exec form runs your binary directly as PID 1. The shell form (`ENTRYPOINT dotnet Payments.Api.dll`) runs `/bin/sh -c "..."`, so the shell is PID 1 and your app is its child. Docker's reference says what happens next: the executable "will not receive Unix signals".[^dockerfile] Here's the difference, timed:
 
@@ -342,9 +339,9 @@ $ docker inspect p-shell --format '{{.State.ExitCode}}'
 137
 ```
 
-Exit code 137 is 128 + 9: killed by `SIGKILL` after the ten-second wait. In Kubernetes that's 30 seconds of a pod that has stopped receiving new traffic but still holds its in-flight requests, which then get cut off.
+Exit code 137 is 128 + 9: killed by `SIGKILL` after the ten-second wait. In Kubernetes that's 30 seconds of a pod taking no new traffic, and then its in-flight requests are cut off.
 
-A wrapper script has the same problem, and `docker run --init` (which puts a tiny init process, `tini`, at PID 1)[^dockerrun] doesn't fully fix it. Tested here with a `start.sh` that runs `dotnet Payments.Api.dll` as its last line: with `--init`, `docker stop` returns quickly with exit code 143, but the .NET host never logs "Application is shutting down...". The likely sequence, reasoning from that: the init forwarded `SIGTERM` to the script, the script (which has no handler) died, the init exited with it, and the kernel killed dotnet along with everything else left in the PID namespace.[^pidns] Dotnet never got to shut down gracefully. The fix is a single word, `exec`, in the last line of the script:
+A wrapper script has the same problem, and `docker run --init` (which puts a tiny init, `docker-init`, backed by `tini`, at PID 1)[^dockerrun] doesn't fully fix it. With a `start.sh` that runs `dotnet Payments.Api.dll` as its last line and the container started with `--init`, `docker stop` returned quickly with exit code 143, but the .NET host never logged "Application is shutting down...". Reasoning from that: the init forwarded `SIGTERM` to the script, the script (with no handler) died, the init exited with it, and the kernel killed dotnet along with everything else in the PID namespace.[^pidns] The fix is one word in the script's last line:
 
 ```sh
 #!/bin/sh
@@ -352,17 +349,17 @@ echo starting
 exec dotnet Payments.Api.dll
 ```
 
-`exec` replaces the shell with dotnet, so dotnet becomes PID 1 (or the init's direct child) and receives the signal itself. With that change the container stopped in 0.36 seconds with exit code 0, and the log ended with `Application is shutting down...`.
+`exec` replaces the shell with dotnet, so dotnet becomes PID 1, or the init's direct child under `--init`, and receives the signal itself. The container then stopped in 0.36 seconds with exit code 0 and a graceful shutdown in the log.
 
-An init process is still worth having when your app spawns child processes it doesn't reap. Kubernetes has no `--init` flag, so for that case put `tini` in the image's `ENTRYPOINT`. ECS has `initProcessEnabled`.[^ecstaskdef]
+![Where docker stop's SIGTERM goes in four setups. Exec form: dotnet is PID 1, handles it, exit 0. Shell form: sh is PID 1 and doesn't forward it, so dotnet is killed by SIGKILL after 10 seconds, exit 137. Wrapper script with --init: tini forwards SIGTERM to the script, the script dies and the kernel kills dotnet, exit 143 with no graceful stop. Script ending in exec: dotnet has replaced the shell, so it is PID 1 or tini's direct child, and handles the signal, exit 0](signals.svg)
+
+An init process is still worth having when your app spawns child processes it doesn't reap. Kubernetes has no `--init` flag, so put `tini` in the image's `ENTRYPOINT`. `shareProcessNamespace: true` also works, because it makes the pod's `pause` container PID 1 and `pause` reaps zombies.[^sharepid][^pause] The cost is that every container in the pod can then see the others' processes and files. ECS has `initProcessEnabled`.[^ecstaskdef]
 
 ## Root and non-root in practice
 
-With that model, here's a practical set of rules for images.
-
 **Run as a numeric UID.** Use `USER 1654` (or `USER $APP_UID`, which expands to it), not `USER app`. The kernel needs a number either way, and as failure 3 will show, Kubernetes can only verify "non-root" from a number.
 
-**Keep app files root-owned and not writable.** Files copied in as `0:0` with mode `644`/`755` can be read and executed by the app user but not modified. An attacker who gets code execution in your app can't overwrite your DLLs. Don't `chown -R app /app` "to fix permissions". That throws this protection away.
+**Keep app files root-owned and not writable.** Files copied in as `0:0` with mode `644`/`755` can be read and executed by the app user but not modified, so an attacker with code execution in your app can't overwrite your DLLs. `chown -R app /app` "to fix permissions" throws that away.
 
 **Make specific directories writable, and only those.** For the payments service that's `/app/data`:
 
@@ -371,7 +368,7 @@ RUN mkdir -p /app/data && chown $APP_UID:0 /app/data && chmod 770 /app/data
 USER $APP_UID
 ```
 
-The directory is owned by UID 1654 and group 0, mode `770`. The app is the owner, so it gets `rwx`. Group 0 also gets `rwx`, which matters on platforms that run images under a random UID with group 0. OpenShift does this by default, and making directories group-0-writable is the usual way to support it.[^openshift] For copied files that need specific modes, `COPY --chown` and `COPY --chmod` set them in the same layer rather than adding another layer of `RUN chmod`.[^dockerfile]
+The app owns the directory, so it gets `rwx`. Group 0 gets `rwx` too, for platforms such as OpenShift that run images under a random UID in group 0.[^openshift] For copied files that need specific modes, `COPY --chown` and `COPY --chmod` set them in the same layer rather than adding another layer of `RUN chmod`.[^dockerfile]
 
 With that change:
 
@@ -384,7 +381,7 @@ drwxrwx--- 1 1654 0 4096 Oct 31 19:59 /app/data
 -rw-r--r-- 1 1654 1654 28 Oct 31 19:59 started.txt
 ```
 
-**Prefer a read-only root filesystem, with explicit writable mounts.** Even better than a writable directory baked into the image is no writable image at all. `--read-only` mounts the container's root filesystem read-only, and anything that needs writing gets a volume or a `tmpfs`:[^dockerrun]
+**Prefer a read-only root filesystem, with explicit writable mounts.** Better than a writable directory in the image is no writable image at all. `--read-only` mounts the container's root filesystem read-only, and anything that needs writing gets a volume or a `tmpfs`:[^dockerrun]
 
 ```console
 $ docker run --rm --read-only payments:fixed
@@ -398,13 +395,13 @@ $ docker run -d --read-only \
       Now listening on: http://[::]:8080
 ```
 
-The read-only error is useful: it lists every path your app writes to, one at a time, so you find them in development rather than in a production incident. `/tmp` is a common one for .NET apps and many libraries.
+The read-only error is useful: it names each path your app writes to, so you find them in development rather than in production. `/tmp` is a common one.
 
-**Know what the hardened base images remove.** "Distroless" and "chiseled" images, Microsoft's Ubuntu Chiseled variants for .NET among them, contain no shell or package manager, and they run as the non-root user by default.[^chiseled] That shrinks the attack surface, and it changes how you debug: `docker exec ... sh` has nothing to run. In Kubernetes, `kubectl debug` with an ephemeral debug container is the replacement.
+**Know what the hardened base images remove.** "Distroless" and "chiseled" images, Microsoft's Ubuntu Chiseled variants for .NET among them, contain no shell or package manager, and they run as the non-root user by default.[^chiseled] That shrinks the attack surface, and it changes how you debug: `docker exec ... sh` has nothing to run. In Kubernetes, `kubectl debug --target` attaches an ephemeral container with its own tools to the app container's process namespace;[^kubectldebug] in a `restricted` namespace, add `--profile=restricted` or admission rejects it.
 
 ## Kubernetes
 
-Kubernetes runs containers across a fleet of machines and keeps them in a state you declare. You don't tell it "start three containers". You write an object that says "there should be three replicas of this pod", and controllers keep comparing that to what's actually running and correct the difference. That loop of observing, comparing and acting is the whole design. It's why a deleted pod comes back, and why editing a Deployment rolls out new pods.
+Kubernetes runs containers across a fleet of machines and keeps them in a state you declare. You don't say "start three containers"; you write an object that says "there should be three replicas of this pod", and controllers keep correcting the difference between that and what's running. That loop is why a deleted pod comes back, and why editing a Deployment rolls out new pods.
 
 ### The objects that matter for an API
 
@@ -414,29 +411,29 @@ Kubernetes runs containers across a fleet of machines and keeps them in a state 
 - A **Deployment** declares a pod template and a replica count. It manages **ReplicaSets**, one per template version, which manage the pods. A rolling update creates a new ReplicaSet and shifts pods across gradually.
 - A **Service** gives a stable virtual IP and DNS name to whichever pods currently match its label selector. Pods come and go; the Service name stays.
 - An **Ingress** (or the newer **Gateway API**) routes external HTTP traffic to Services.
-- **ConfigMaps** and **Secrets** hold configuration and credentials, mounted as files or exposed as environment variables. Secrets are base64-*encoded*, not encrypted, and the Kubernetes documentation is explicit that by default they're stored unencrypted in etcd.[^secrets] Turn on encryption at rest and restrict who can read them.
+- **ConfigMaps** and **Secrets** hold configuration and credentials, mounted as files or exposed as environment variables. Secrets are base64-*encoded*, not encrypted, and by default they're stored unencrypted in etcd,[^secrets] so turn on encryption at rest and restrict who can read them.
 - A **ServiceAccount** is the pod's identity to the Kubernetes API, and on EKS, the thing an IAM role is attached to.
 
 ### Probes, resources and shutdown
 
 Three settings decide whether a Deployment behaves well in production.
 
-**Probes.** A *readiness* probe decides whether the pod receives traffic from Services; failing it takes the pod out of rotation without restarting it. A *liveness* probe decides whether the container is restarted. A *startup* probe holds off the other two until slow initialisation finishes.[^probes] The usual mistake is pointing liveness at something that checks dependencies, such as the database. When the database has a blip, every pod fails liveness and restarts together, which makes the outage worse. Liveness should answer "is this process wedged?". Readiness can answer "can I serve right now?".
+**Probes.** A *readiness* probe decides whether the pod receives traffic from Services; failing it takes the pod out of rotation without restarting it. A *liveness* probe decides whether the container is restarted. A *startup* probe holds off the other two until slow initialisation finishes.[^probes] The usual mistake is a liveness check on a dependency such as the database: when the database blips, every pod restarts together and the outage gets worse. Liveness should answer "is this process wedged?", readiness "can I serve right now?".
 
-**Requests and limits.** A *request* is what the scheduler reserves for the container on a node. A *limit* is the cgroup ceiling. A CPU limit is enforced by throttling, so the container slows down. A memory limit is enforced by the kernel's OOM killer, so the container dies, and `kubectl describe pod` shows `Reason: OOMKilled`.[^resources] For .NET, the garbage collector treats the container's memory limit as the machine's physical memory and, by default, caps the GC heap at 75% of it, so a limit is also an input to your app's memory behaviour.[^dotnetgc]
+**Requests and limits.** A *request* is what the scheduler reserves for the container on a node. A *limit* is the cgroup ceiling. A CPU limit is enforced by throttling, so the container slows down; a memory limit by the OOM killer, so it dies with `Reason: OOMKilled`.[^resources] The .NET garbage collector treats the memory limit as the machine's physical memory and by default caps the heap at 75% of it, so the limit also shapes your app's memory behaviour.[^dotnetgc]
 
-**Graceful shutdown.** When a pod is deleted, Kubernetes removes it from Service endpoints and sends `SIGTERM`, then `SIGKILL` after `terminationGracePeriodSeconds`, which defaults to 30.[^podlifecycle] Those two things happen concurrently, so a pod can receive a few requests *after* `SIGTERM` while load balancers catch up. That's why many teams add a short `preStop` sleep. All of this assumes your process actually receives `SIGTERM`, which brings back the PID 1 section.
+**Graceful shutdown.** When a pod is deleted, Kubernetes removes it from Service endpoints and sends `SIGTERM`, then `SIGKILL` after `terminationGracePeriodSeconds`, which defaults to 30.[^podlifecycle] Those happen concurrently, so a pod can receive a few requests *after* `SIGTERM` while load balancers catch up, which is why many teams add a short `preStop` sleep.
 
 ### The security context
 
-The pod and container `securityContext` is where the Linux model becomes YAML. Everything in it maps to something from earlier in this post:
+The pod and container `securityContext` is where the Linux model becomes YAML; every field maps to something above:
 
 ```yaml
 spec:
   securityContext:                  # pod level: applies to all containers
     runAsNonRoot: true              # refuse to start a container that would run as UID 0
     runAsUser: 1654                 # override the image's USER
-    runAsGroup: 1654                # primary GID; without this, the GID is 0
+    runAsGroup: 1654                # primary GID; if omitted, the image's passwd entry, else 0
     fsGroup: 1654                   # supplementary group, applied to volumes
     seccompProfile:
       type: RuntimeDefault          # the runtime's syscall filter
@@ -449,15 +446,13 @@ spec:
           drop: ["ALL"]
 ```
 
-A few of these need more explanation.
+**`runAsNonRoot`** is a check, not a setting. The kubelet looks at the UID the container will run as (from `runAsUser`, or from the image's `USER`) and refuses to start it if it's 0. If the image's `USER` is a **name**, the kubelet can't resolve it without the image's `/etc/passwd`, so it refuses that too: "image has non-numeric user ... cannot verify user is non-root".[^kubeletnonroot] That's failure 3.
 
-**`runAsNonRoot`** is a check, not a setting. The kubelet looks at the UID the container will run as (from `runAsUser`, or from the image's `USER`) and refuses to start it if it's 0. If the image's `USER` is a **name**, the kubelet can't resolve it (it would need the image's `/etc/passwd`), so it refuses that too: "image has non-numeric user ... cannot verify user is non-root".[^kubeletnonroot] That's failure 3.
-
-**`fsGroup`** is the setgid directory from earlier, applied automatically. For volume types that support it, the kubelet changes each file's group to the `fsGroup` GID and adds group permissions: `rw` for writable volumes, `r` for read-only ones such as Secrets. Directories also get the setgid bit, so new files inherit the group. The process also gets `fsGroup` as a supplementary group.[^k8ssc][^volumeownership] On large volumes this recursive change can slow pod startup. `fsGroupChangePolicy: OnRootMismatch` skips it when the volume's root already looks right.[^k8ssc]
+**`fsGroup`** is the setgid directory from earlier, applied automatically. For volume types that support it, the kubelet sets each file's group to the `fsGroup` GID and adds group `rw` (or `r` on read-only volumes such as Secrets), sets setgid on directories, and gives the process `fsGroup` as a supplementary group.[^k8ssc][^volumeownership] On large volumes the recursive change slows pod startup; `fsGroupChangePolicy: OnRootMismatch` skips it when the volume's root already looks right.[^k8ssc]
 
 **`allowPrivilegeEscalation`** defaults to `true` and controls the kernel's `no_new_privs` flag.[^k8ssc] With it set to `false`, a setuid-root binary in the image can't give your process root.
 
-**`seccompProfile: RuntimeDefault`** filters system calls the container almost certainly doesn't need. Docker applies its default profile automatically, but Kubernetes runs pods as `Unconfined` unless you ask for `RuntimeDefault` or the node turns on the kubelet's `seccompDefault` setting.[^seccomp] It's one of the places where "it was fine under Docker" doesn't carry over.
+**`seccompProfile: RuntimeDefault`** filters system calls the container almost certainly doesn't need. Docker applies its default profile automatically, but Kubernetes runs pods as `Unconfined` unless you ask for `RuntimeDefault` or the node turns on the kubelet's `seccompDefault` setting.[^seccomp] "It was fine under Docker" doesn't carry over here.
 
 **`readOnlyRootFilesystem`** is `--read-only`. Writable paths become `emptyDir` volumes (a directory that lives as long as the pod, optionally in memory):
 
@@ -484,7 +479,9 @@ That's the setup for failure 2. The dev namespace mounted the bank client key wi
         defaultMode: 0400
 ```
 
-UID 1654 isn't the owner, and both the group bits and the other bits are `---`, so the read is denied whichever set applies. The fix is the group mechanism: add `fsGroup: 1654` to the pod. The kubelet then sets each file's group to 1654 and adds group read, giving `0440` with group 1654.[^volumeownership] The app is in group 1654 and can read the key. Other users still can't, and nobody can write it.
+UID 1654 isn't the owner, and both the group bits and the other bits are `---`, so the read is denied whichever set applies. The fix is `fsGroup: 1654` on the pod: the kubelet sets each file's group to 1654 and adds group read, giving `0440`.[^volumeownership] The app can read the key, other users still can't, and the mount is read-only.
+
+![The bank key read by a process running as UID 1654 in group 1654. With defaultMode 0400 alone, the file is 0:0 with mode r-- --- ---; the process is neither owner nor in the group, the other bits are empty, and the read fails with EACCES. With fsGroup 1654 added, the kubelet sets the group to 1654 and ORs in 0440, giving r-- r-- ---, so the group bits apply and the read is allowed](secret-fsgroup.svg)
 
 One YAML caution from the same documentation page: `0400` is octal in YAML but would be read as the decimal number 400 in JSON, so JSON manifests need `256`.[^secretfiles]
 
@@ -526,7 +523,7 @@ Templates are Go templates over YAML. The security context belongs in the chart,
 # values.yaml
 image:
   repository: 123456789012.dkr.ecr.eu-west-1.amazonaws.com/payments-api
-  digest: ""            # set by the pipeline: sha256:...
+  digest: ""            # required; the pipeline sets the pushed digest
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1654
@@ -547,7 +544,7 @@ containerSecurityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: api
-          image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+          image: "{{ .Values.image.repository }}@{{ required "image.digest is required" .Values.image.digest }}"
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
 ```
@@ -557,14 +554,14 @@ The commands you'll use most:
 ```sh
 helm lint ./payments-api                                  # catch template and chart errors
 helm template ./payments-api -f values-prod.yaml          # render locally, apply nothing
-helm upgrade --install payments ./payments-api \
+helm upgrade --install payments-api ./payments-api \
   -n payments-prod -f values-prod.yaml \
-  --set image.digest=sha256:3ca767a9...                   # install or upgrade the release
-helm history payments -n payments-prod                    # list revisions
-helm rollback payments 41 -n payments-prod                # go back to revision 41
+  --set image.digest=sha256:5e1d07b4...                   # install or upgrade the release
+helm history payments-api -n payments-prod                # list revisions
+helm rollback payments-api 41 -n payments-prod            # go back to revision 41
 ```
 
-`helm template` is the important habit. It shows exactly the YAML that will reach the cluster, which is the only thing Kubernetes ever sees. Kubernetes doesn't know Helm exists. A rendered manifest is a good thing to diff in code review.
+`helm template` is the important habit. It shows exactly the YAML that will reach the cluster, which is all Kubernetes ever sees, and it's a good thing to diff in code review.
 
 Helm 4, released in November 2025, kept these commands and the chart format; the changes are mostly in plugins, the SDK and server-side apply.[^helm4] If your needs are only "the same manifests with a few per-environment patches", **Kustomize** (built into `kubectl` as `kubectl apply -k`) does that without a template language and is worth considering first. Helm earns its place when you need real parameterisation, packaging for other teams, or release history and rollback.
 
@@ -574,9 +571,9 @@ AWS offers two container orchestrators, and both can run on either EC2 instances
 
 ![Who manages what on EKS and ECS, each on EC2 or Fargate. EKS: AWS runs the Kubernetes control plane; on EC2 you manage worker nodes (AMIs, patching, scaling), on Fargate AWS runs each pod in its own VM. ECS: AWS runs the orchestrator, which has no control plane for you to see; on EC2 you manage container instances, on Fargate AWS runs each task in its own VM. In every case you own the image, its USER and file permissions, the task or pod security settings, and the IAM role](eks-vs-ecs.svg)
 
-**EKS** is managed Kubernetes. AWS runs the control plane (API server, etcd, scheduler) and you get the full Kubernetes API, so everything in the previous two sections applies unchanged: Deployments, `securityContext`, Pod Security Admission, Helm. You also take on Kubernetes' operational surface: cluster version upgrades, add-ons (VPC CNI, CoreDNS, the load balancer controller), and node management unless you use Fargate or a managed mode.
+**EKS** is managed Kubernetes. AWS runs the control plane (API server, etcd, scheduler) and you get the full Kubernetes API, so everything above applies unchanged. You also take on Kubernetes' operational surface: cluster version upgrades, add-ons (VPC CNI, CoreDNS, the load balancer controller), and node management unless you use Fargate or EKS Auto Mode, where AWS also runs the nodes, autoscaling, load balancer integration and storage drivers.[^eksauto]
 
-**ECS** is AWS's own orchestrator. It has no YAML and no control plane you can see, and the main concepts are a *task definition* (roughly a pod spec), a *task* (a running instance of one) and a *service* (keep N tasks running behind a load balancer). It's less to learn and operate, but tied to AWS, with no Helm and no Kubernetes ecosystem.
+**ECS** is AWS's own orchestrator. It has no control plane you can see; the main concepts are a *task definition* (roughly a pod spec), a *task* (a running instance of one) and a *service* (keep N tasks running behind a load balancer). It's less to learn and operate, but tied to AWS, with no Helm and no Kubernetes ecosystem.
 
 The Linux settings carry over directly. ECS task definitions have the same knobs under different names:[^ecstaskdef]
 
@@ -589,7 +586,7 @@ The Linux settings carry over directly. ECS task definitions have the same knobs
   "executionRoleArn": "arn:aws:iam::123456789012:role/payments-api-execution",
   "containerDefinitions": [{
     "name": "api",
-    "image": "123456789012.dkr.ecr.eu-west-1.amazonaws.com/payments-api@sha256:3ca767a9...",
+    "image": "123456789012.dkr.ecr.eu-west-1.amazonaws.com/payments-api@sha256:5e1d07b4...",
     "user": "1654",
     "readonlyRootFilesystem": true,
     "linuxParameters": {
@@ -602,67 +599,26 @@ The Linux settings carry over directly. ECS task definitions have the same knobs
 }
 ```
 
-`user` is `docker run --user`. `readonlyRootFilesystem` is `--read-only`. `initProcessEnabled` is `--init`. On Fargate, `SYS_PTRACE` is the only capability you can *add*. `stopTimeout` is the grace period between `SIGTERM` and `SIGKILL`; it defaults to 30 seconds with a maximum of 120. Fargate tasks must use the `awsvpc` network mode, where every task gets its own elastic network interface and VPC IP address.[^ecstaskdef]
+`user` is `docker run --user`, `readonlyRootFilesystem` is `--read-only` and `initProcessEnabled` is `--init`. On Fargate, `SYS_PTRACE` is the only capability you can *add*. `stopTimeout` is the grace period between `SIGTERM` and `SIGKILL` (default 30 seconds, maximum 120), and Fargate tasks must use the `awsvpc` network mode, which gives each task its own network interface and VPC IP address.[^ecstaskdef]
 
 **IAM for workloads** is where the two differ most, and it matters for the payments service, which also reads its database password from AWS Secrets Manager:
 
 - On **ECS**, the **task role** (`taskRoleArn`) is the identity your code's AWS SDK calls use. The **execution role** is different: it's what the ECS agent uses to pull the image and fetch secrets *before* your code starts. Mixing these up is a common source of `AccessDenied`.[^ecstaskdef]
-- On **EKS**, an IAM role is attached to a Kubernetes **ServiceAccount**. There are two ways to do it. **IRSA** (IAM roles for service accounts) federates through the cluster's OIDC provider. **EKS Pod Identity** is newer and simpler: an agent DaemonSet on each node hands out credentials, there's no OIDC provider to manage, and the role's trust policy names one service principal, `pods.eks.amazonaws.com`, for every cluster.[^ekspodid] Pod Identity isn't supported for pods on Fargate, which use IRSA instead.[^ekspodid][^eksfargate]
+- On **EKS**, an IAM role is attached to a Kubernetes **ServiceAccount**. **IRSA** (IAM roles for service accounts) federates through the cluster's OIDC provider. **EKS Pod Identity** is newer and simpler: an agent DaemonSet on each node hands out credentials, there's no OIDC provider to manage, and the role's trust policy names one service principal, `pods.eks.amazonaws.com`, for every cluster.[^ekspodid] Pod Identity isn't supported for pods on Fargate, which use IRSA instead.[^ekspodid][^eksfargate]
 
-**Fargate on EKS** also has Kubernetes-specific limits: no DaemonSets, no privileged containers, no `hostNetwork` or `hostPort`, and no EBS volumes. Each pod gets its own VM and kernel.[^eksfargate] The per-pod VM is a real security benefit, since a container escape lands in a VM with nothing else in it.
+**Fargate on EKS** also has Kubernetes-specific limits: no DaemonSets, no privileged containers, no `hostNetwork` or `hostPort`, and no EBS volumes. Each pod gets its own VM and kernel,[^eksfargate] which is a real security benefit: a container escape lands in a VM with nothing else in it.
 
-A rough way to choose, as an opinion rather than a rule: if you already run Kubernetes, need its ecosystem (operators, service mesh, Helm charts from vendors) or need to stay portable across clouds, use **EKS**. If you're an AWS shop running a handful of stateless HTTP services and workers and don't want to operate Kubernetes, **ECS on Fargate** gets you to production with far less to learn. Either way, the image, its `USER`, its file permissions and its shutdown behaviour are the same work.
+A rough way to choose, as opinion rather than rule: if you already run Kubernetes, need its ecosystem (operators, service mesh, Helm charts from vendors) or need to stay portable across clouds, use **EKS**. If you're an AWS shop running a handful of stateless HTTP services and workers and don't want to operate Kubernetes, **ECS on Fargate** gets you to production with far less to learn. Either way, the image, its `USER`, its file permissions and its shutdown behaviour are the same work.
 
 ## Resolving the payments API
 
-### 1. `Access to the path '/app/data' is denied`
+| Failure | Cause | Fix |
+| --- | --- | --- |
+| `Access to the path '/app/data' is denied` | `COPY` leaves `/app` owned by `0:0`, mode `755`; UID 1654 gets the other bits, `r-x` | Keep app files root-owned; add the one `RUN mkdir … chown $APP_UID:0` line from [Root and non-root in practice](#root-and-non-root-in-practice), and an `emptyDir` in the cluster |
+| `Access to the path '/etc/bank/tls.key' is denied` | Secret files are root-owned; `defaultMode: 0400` leaves group and other `---` | `fsGroup: 1654`, giving `0440` with group 1654. Not `defaultMode: 0444`, which makes the key readable by every UID |
+| `image has non-numeric user (app), cannot verify user is non-root` | `USER app` gives the kubelet a name it can't check without the image's `/etc/passwd` | A numeric `USER` (`$APP_UID` expands to `1654`), or `runAsUser: 1654` in the pod; the service now does both |
 
-**Cause.** `COPY` creates files owned by `0:0`, so `/app` is owned by root with mode `755`. The app runs as UID 1654, which falls through to the "other" bits, `r-x`, and can't create a directory there.
-
-**Fix.** Leave the app files root-owned. Give the app one directory it owns, and in Kubernetes make it a volume so the root filesystem can be read-only:
-
-```dockerfile
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-WORKDIR /src
-COPY Payments.Api.csproj .
-RUN dotnet restore
-COPY . .
-RUN dotnet publish -c Release -o /app/publish --no-restore
-
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
-WORKDIR /app
-COPY --from=build /app/publish .
-RUN mkdir -p /app/data && chown $APP_UID:0 /app/data && chmod 770 /app/data
-USER $APP_UID
-ENTRYPOINT ["dotnet", "Payments.Api.dll"]
-```
-
-In the cluster, `/app/data` gets an `emptyDir` volume and `readOnlyRootFilesystem: true`, so the directory in the image only matters when the container runs without one, under plain `docker run` for example. If the data must survive pod restarts, it shouldn't be in the pod at all.
-
-### 2. `Access to the path '/etc/bank/tls.key' is denied`
-
-**Cause.** The Secret volume uses `defaultMode: 0400`. Secret files are owned by root, so `0400` means only root can read them. UID 1654 isn't the owner, and both the group and the other bits are `---`.
-
-**Fix.** Keep the tight mode and add `fsGroup`. The kubelet sets the file's group to 1654 and adds group read, giving `0440`, and the process gets 1654 as a supplementary group:[^volumeownership]
-
-```yaml
-spec:
-  securityContext:
-    fsGroup: 1654
-  volumes:
-    - name: bank-client
-      secret:
-        secretName: payments-bank-client
-        defaultMode: 0400
-```
-
-`kubectl exec deploy/payments-api -- id` should now list 1654 in `groups`, and `ls -ln /etc/bank/` (follow the symlinks: Secret volume files are links into a timestamped directory) should show the key as `0440` with group 1654. A blunter fix, `defaultMode: 0444`, also works, but makes the private key readable by any UID in the container. The group fix grants exactly one group.
-
-### 3. `container has runAsNonRoot and image has non-numeric user (app)`
-
-**Cause.** The older build's Dockerfile used `USER app`. The kubelet only knows the image config's `User` string, `app`. It can't map that to a UID without reading the image's `/etc/passwd`, so with `runAsNonRoot: true` it refuses to create the container.[^kubeletnonroot] Pod status shows `CreateContainerConfigError`, not a crash, because the container never started.
-
-**Fix.** Either use a numeric `USER` in the image (`USER $APP_UID` expands to `1654`, which is what the current Dockerfile does) or set `runAsUser: 1654` in the pod's security context, which overrides the image and gives the kubelet a number to check. Between the Dockerfile and the chart, the service now does both: belt and braces.
+To confirm fix 2, `kubectl exec deploy/payments-api -- stat -L -c '%a %g' /etc/bank/tls.key` should print `440 1654` (`-L` follows the symlinks Secret volumes use).
 
 The full production pod spec that comes out of the Helm chart:
 
@@ -671,7 +627,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: payments-api
-  namespace: payments-prod
 spec:
   replicas: 3
   selector:
@@ -690,7 +645,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: api
-          image: 123456789012.dkr.ecr.eu-west-1.amazonaws.com/payments-api@sha256:3ca767a9...
+          image: 123456789012.dkr.ecr.eu-west-1.amazonaws.com/payments-api@sha256:5e1d07b4...
           ports: [{ containerPort: 8080 }]
           securityContext:
             allowPrivilegeEscalation: false
@@ -720,7 +675,7 @@ spec:
             defaultMode: 0400
 ```
 
-It passes the `restricted` profile. The process can write only to `/app/data` and `/tmp`, can read the key through its group, and holds no capabilities. It shuts down on `SIGTERM` within its grace period. The `sleep` `preStop` action needs a recent Kubernetes version. On older clusters, use `exec` with `sleep 5`, which needs a `sleep` binary in the image.[^lifecycle] The bare `/healthz` serves both probes here because it checks nothing but the process. A readiness endpoint that also checks the bank connection would be a reasonable next step.
+It passes the `restricted` profile. The process can write only to `/app/data` and `/tmp`, can read the key through its group, holds no capabilities, and shuts down on `SIGTERM` within its grace period. The `sleep` `preStop` action is on by default from Kubernetes 1.30 and stable in 1.34; older clusters need an `exec` hook and a `sleep` binary in the image.[^lifecycle][^sleepgate] The bare `/healthz` serves both probes because it checks only the process; a readiness check on the bank connection would be a reasonable next step.
 
 ## Cheat sheet
 
@@ -758,8 +713,8 @@ docker exec c ps -o pid,comm              # who is PID 1?
 ```sh
 kubectl describe pod p                    # events: CreateContainerConfigError, OOMKilled, probe failures
 kubectl get pod p -o jsonpath='{.status.containerStatuses[0].lastState}'
-kubectl exec deploy/payments-api -- id
-kubectl debug -it pod/p --image=busybox --target=api   # ephemeral debug container for shell-less images
+kubectl exec deploy/payments-api -- stat -L -c '%a %u:%g' /etc/bank/tls.key
+kubectl debug -it pod/p --image=busybox --target=api --profile=restricted   # debug shell-less images
 kubectl label ns payments-prod pod-security.kubernetes.io/warn=restricted   # see violations without blocking
 ```
 
@@ -797,18 +752,18 @@ helm history rel; helm rollback rel N
 [^umask]: Linux man-pages, ["umask(2)"](https://man7.org/linux/man-pages/man2/umask.2.html) — the file mode creation mask and how it's applied to permissions requested by `open(2)` and `mkdir(2)`.
 [^inode]: Linux man-pages, ["inode(7)"](https://man7.org/linux/man-pages/man7/inode.7.html) — the set-group-ID bit on a directory causing new files to inherit the directory's group ID.
 [^capabilities]: Linux man-pages, ["capabilities(7)"](https://man7.org/linux/man-pages/man7/capabilities.7.html) — the list of capabilities, permitted/effective/bounding/ambient sets, and what happens to them across a UID change.
-[^mobycaps]: Moby (Docker Engine) source, [`oci/caps/defaults.go`](https://github.com/moby/moby/blob/master/daemon/pkg/oci/caps/defaults.go) — `DefaultCapabilities()`, the 14 capabilities granted by default.
+[^mobycaps]: Moby (Docker Engine) source, [`daemon/pkg/oci/caps/defaults.go`](https://github.com/moby/moby/blob/master/daemon/pkg/oci/caps/defaults.go) — `DefaultCapabilities()`, the 14 capabilities granted by default.
 [^mobyport]: Moby (Docker Engine) source, [`daemon/oci_linux.go`](https://github.com/moby/moby/blob/master/daemon/oci_linux.go) — sets `net.ipv4.ip_unprivileged_port_start` to `0` for containers not using host networking, with the comment "allow opening any port less than 1024 without CAP_NET_BIND_SERVICE".
 [^containerdports]: containerd, ["CRI Plugin Config Guide"](https://github.com/containerd/containerd/blob/main/docs/cri/config.md) — `enable_unprivileged_ports` sets `ip_unprivileged_port_start=0` for containers not using host network; "before containerd v2.0, this value defaulted to false".
 [^pidns]: Linux man-pages, ["pid_namespaces(7)"](https://man7.org/linux/man-pages/man7/pid_namespaces.7.html) — the namespace's init process becoming the parent of orphans, only receiving signals for which it has installed a handler, and the kernel terminating all other processes in the namespace with `SIGKILL` when the init process terminates.
 [^podlifecycle]: Kubernetes, ["Pod Lifecycle: Termination of Pods"](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-termination) — `SIGTERM`, then `SIGKILL` after the grace period; "The default `terminationGracePeriodSeconds` setting is 30 seconds"; `preStop` hooks and endpoint removal. Docker's 10-second default is in ["docker container stop"](https://docs.docker.com/reference/cli/docker/container/stop/).
-[^dockerrun]: Docker, ["docker container run"](https://docs.docker.com/reference/cli/docker/container/run/) — `--init` (run an init inside the container that forwards signals and reaps processes), `--read-only`, `--tmpfs`, `--user`, `--cap-add` and `--cap-drop`.
+[^dockerrun]: Docker, ["docker container run"](https://docs.docker.com/reference/cli/docker/container/run/) — `--init` (an init as PID 1, by default `docker-init`, backed by tini), `--read-only`, `--tmpfs`, `--user`, `--cap-add` and `--cap-drop`.
 [^ecstaskdef]: AWS, ["Amazon ECS task definition parameters for Fargate"](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html) — `user`, `readonlyRootFilesystem`, `linuxParameters.capabilities` (with `SYS_PTRACE` the only valid `add` value), `initProcessEnabled` (maps to `--init`), `stopTimeout` (default 30 seconds, maximum 120), `taskRoleArn` versus `executionRoleArn`, and `awsvpc` being required on Fargate.
 [^secrets]: Kubernetes, ["Secrets"](https://kubernetes.io/docs/concepts/configuration/secret/) — "Kubernetes Secrets are, by default, stored unencrypted in the API server's underlying data store (etcd)."
 [^dotnetgc]: Microsoft, ["Runtime configuration options for garbage collection"](https://learn.microsoft.com/en-us/dotnet/core/runtime-config/garbage-collector) — inside a container with a memory limit, "that limit is treated as the total physical memory", and the default heap hard limit is 75% of it.
 [^probes]: Kubernetes, ["Configure Liveness, Readiness and Startup Probes"](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/) — liveness failures restart the container, readiness failures remove it from Service endpoints, and startup probes disable the others until they succeed.
 [^resources]: Kubernetes, ["Resource Management for Pods and Containers"](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) — "`cpu` limits are enforced by CPU throttling", "`memory` limits are enforced by the kernel with out of memory (OOM) kills", and the `OOMKilled` reason.
-[^k8ssc]: Kubernetes, ["Configure a Security Context for a Pod or Container"](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/) — `runAsUser`, `runAsGroup` ("If this field is omitted, the primary group ID of the containers will be root(0)"), `fsGroup` ownership of volumes and the setgid example, `fsGroupChangePolicy`, and `allowPrivilegeEscalation` defaulting to true and controlling `no_new_privs`.
+[^k8ssc]: Kubernetes, ["Configure a Security Context for a Pod or Container"](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/) — `runAsUser`, `runAsGroup`, `fsGroup` ownership of volumes and the setgid example, `fsGroupChangePolicy`, and `allowPrivilegeEscalation` defaulting to true and controlling `no_new_privs`.
 [^kubeletnonroot]: Kubernetes source, [`pkg/kubelet/kuberuntime/security_context_others.go`](https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kuberuntime/security_context_others.go) — the `runAsNonRoot` checks and their messages, including "container has runAsNonRoot and image has non-numeric user (%s), cannot verify user is non-root" and "image will run as root"; these surface as `CreateContainerConfigError`.
 [^volumeownership]: Kubernetes source, [`pkg/volume/volume_linux.go`](https://github.com/kubernetes/kubernetes/blob/master/pkg/volume/volume_linux.go) — `changeFilePermission` sets each file's group to `fsGroup` and ORs in `0660` (read-write volumes) or `0440` (read-only volumes), plus setgid and `0110` on directories. Secret volumes are read-only and apply `fsGroup` ownership ([`pkg/volume/secret/secret.go`](https://github.com/kubernetes/kubernetes/blob/master/pkg/volume/secret/secret.go)).
 [^seccomp]: Kubernetes, ["Restrict a Container's Syscalls with seccomp"](https://kubernetes.io/docs/tutorials/security/seccomp/) — without the kubelet's `seccompDefault` setting, "the default is `Unconfined`".
@@ -818,5 +773,12 @@ helm history rel; helm rollback rel N
 [^lifecycle]: Kubernetes, ["Container Lifecycle Hooks"](https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/) — `exec`, `httpGet` and `sleep` hook handlers.
 [^helm]: Helm, ["Using Helm"](https://helm.sh/docs/intro/using_helm/) — charts, releases, values files, `helm upgrade --install`, `helm history` and `helm rollback`; and ["Chart Template Guide"](https://helm.sh/docs/chart_template_guide/) for templates and `helm template`.
 [^helm4]: Helm, ["Helm 4 Released"](https://helm.sh/blog/helm-4-released/) — released 12 November 2025; redesigned plugin system, updated SDK, server-side apply support.
+[^containerdstore]: Docker, ["containerd image store with Docker Engine"](https://docs.docker.com/engine/storage/containerd/) — the containerd image store is the default for fresh installations of Docker Engine 29.0 and later.
+[^containerduid]: containerd source, [`pkg/oci/spec_opts.go`](https://github.com/containerd/containerd/blob/main/pkg/oci/spec_opts.go) — `WithUserID`: "If /etc/passwd does not exist, or uid is not found in /etc/passwd, it sets the requested uid, additionally sets the gid to 0".
+[^sharepid]: Kubernetes, ["Share Process Namespace between Containers in a Pod"](https://kubernetes.io/docs/tasks/configure-pod-container/share-process-namespace/) — with `shareProcessNamespace: true`, the container process no longer has PID 1; the pod sandbox (`/pause`) does.
+[^pause]: Kubernetes source, [`build/pause/linux/pause.c`](https://github.com/kubernetes/kubernetes/blob/master/build/pause/linux/pause.c) — the `SIGCHLD` handler `sigreap` calls `waitpid(-1, NULL, WNOHANG)` in a loop to reap exited children.
+[^kubectldebug]: Kubernetes, ["Debug Running Pods"](https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/) — ephemeral containers for images that don't include debugging utilities, "such as with distroless images", and `--target` joining another container's process namespace.
+[^sleepgate]: Kubernetes, ["Feature Gates"](https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/) — `PodLifecycleSleepAction`: alpha in 1.29, beta and on by default from 1.30, stable from 1.34.
+[^eksauto]: AWS, ["Automate cluster infrastructure with EKS Auto Mode"](https://docs.aws.amazon.com/eks/latest/userguide/automode.html) — AWS manages the EC2 nodes, compute autoscaling, pod networking, Elastic Load Balancing integration and block storage drivers.
 [^ekspodid]: AWS, ["Learn how EKS Pod Identity grants pods access to AWS services"](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) — associating IAM roles with service accounts without OIDC providers, the `pods.eks.amazonaws.com` principal, the Pod Identity Agent DaemonSet, and "Linux and Windows pods that run on AWS Fargate (Fargate) aren't supported".
 [^eksfargate]: AWS, ["Simplify compute management with AWS Fargate"](https://docs.aws.amazon.com/eks/latest/userguide/fargate.html) — EKS on Fargate considerations: no DaemonSets, no privileged containers, no `HostPort` or `HostNetwork`, no EBS volumes, a dedicated kernel per pod, and IRSA for IAM credentials.

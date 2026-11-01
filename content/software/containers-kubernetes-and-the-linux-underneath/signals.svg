@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 380" role="img" aria-labelledby="t">
+  <title id="t">Where docker stop's SIGTERM goes in four setups. Exec form: dotnet is PID 1, handles it and exits 0. Shell form: sh is PID 1, doesn't forward it, and dotnet is killed by SIGKILL after 10 seconds with exit 137. Wrapper script with --init: tini forwards SIGTERM to the script, the script dies, and the kernel kills dotnet, exit 143 with no graceful stop. Script ending in exec: dotnet replaces the shell, becoming PID 1 or tini's child, handles the signal and exits 0</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .bad { fill: #fca5a5; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .badbox { fill: #2a1620; stroke: #f87171; stroke-width: 1.5; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .child { fill: none; stroke: #9baeca; stroke-width: 1.5; stroke-dasharray: 4 4; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+  </defs>
+  <rect width="800" height="380" fill="#08111f"/>
+
+  <text class="muted" x="400" y="26" text-anchor="middle">Blue arrow: SIGTERM delivered. Dashed line: parent and child process.</text>
+
+  <!-- Row 1: exec form -->
+  <text x="20" y="76">exec form</text>
+  <text class="muted" x="20" y="94">ENTRYPOINT ["dotnet",…]</text>
+  <path class="ptr" d="M196 78 H226" marker-end="url(#a)"/>
+  <rect class="hl" x="230" y="56" width="120" height="44" rx="6"/>
+  <text x="290" y="83" text-anchor="middle">dotnet</text>
+  <text class="muted" x="290" y="118" text-anchor="middle">handles it</text>
+  <text class="muted" x="670" y="76">graceful</text>
+  <text class="muted" x="670" y="94">exit 0</text>
+
+  <!-- Row 2: shell form -->
+  <text x="20" y="156">shell form</text>
+  <text class="muted" x="20" y="174">ENTRYPOINT dotnet …</text>
+  <path class="ptr" d="M196 158 H226" marker-end="url(#a)"/>
+  <rect class="box" x="230" y="136" width="120" height="44" rx="6"/>
+  <text x="290" y="163" text-anchor="middle">sh</text>
+  <path class="child" d="M350 158 H380"/>
+  <rect class="badbox" x="380" y="136" width="120" height="44" rx="6"/>
+  <text x="440" y="163" text-anchor="middle">dotnet</text>
+  <text class="bad" x="290" y="198" text-anchor="middle">doesn't forward</text>
+  <text class="bad" x="440" y="198" text-anchor="middle">never sees it</text>
+  <text class="bad" x="670" y="156">SIGKILL at 10s</text>
+  <text class="bad" x="670" y="174">exit 137</text>
+
+  <!-- Row 3: wrapper script with --init -->
+  <text x="20" y="236">wrapper script</text>
+  <text class="muted" x="20" y="254">with --init</text>
+  <path class="ptr" d="M196 238 H226" marker-end="url(#a)"/>
+  <rect class="box" x="230" y="216" width="120" height="44" rx="6"/>
+  <text x="290" y="243" text-anchor="middle">tini</text>
+  <path class="ptr" d="M350 238 H376" marker-end="url(#a)"/>
+  <rect class="badbox" x="380" y="216" width="120" height="44" rx="6"/>
+  <text x="440" y="243" text-anchor="middle">sh start.sh</text>
+  <path class="child" d="M500 238 H530"/>
+  <rect class="badbox" x="530" y="216" width="120" height="44" rx="6"/>
+  <text x="590" y="243" text-anchor="middle">dotnet</text>
+  <text class="muted" x="290" y="278" text-anchor="middle">forwards it</text>
+  <text class="bad" x="440" y="278" text-anchor="middle">dies on it</text>
+  <text class="bad" x="590" y="278" text-anchor="middle">killed by kernel</text>
+  <text class="bad" x="670" y="236">no graceful stop</text>
+  <text class="bad" x="670" y="254">exit 143</text>
+
+  <!-- Row 4: script ending in exec -->
+  <text x="20" y="316">script + exec</text>
+  <text class="muted" x="20" y="334">exec dotnet …</text>
+  <path class="ptr" d="M196 318 H226" marker-end="url(#a)"/>
+  <rect class="hl" x="230" y="296" width="120" height="44" rx="6"/>
+  <text x="290" y="323" text-anchor="middle">dotnet</text>
+  <text class="muted" x="290" y="358" text-anchor="middle">PID 1, or tini's child</text>
+  <text class="muted" x="670" y="316">graceful</text>
+  <text class="muted" x="670" y="334">exit 0</text>
+</svg>

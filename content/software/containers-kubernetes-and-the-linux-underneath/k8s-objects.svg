@@ -3,7 +3,7 @@
   <style>
     text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 13.5px; }
     .small { font-size: 12px; }
-    .muted { fill: #9baeca; font-size: 11.5px; }
+    .muted { fill: #9baeca; font-size: 12px; }
     .acc { fill: #7dd3fc; font-size: 12px; }
     .region { fill: none; stroke: #3a4d6b; stroke-width: 1.5; stroke-dasharray: 6 4; }
     .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
@@ -53,7 +53,7 @@
   <text class="muted" x="44" y="314">template + replicas: 3</text>
   <rect class="box" x="30" y="360" width="180" height="56" rx="5"/>
   <text x="44" y="384">ReplicaSet</text>
-  <text class="muted" x="44" y="404">one per template version</text>
+  <text class="muted" x="44" y="404">one per pod template</text>
   <path class="own" d="M120 326 L120 358" marker-end="url(#o)"/>
   <path class="own" d="M210 388 L258 388" marker-end="url(#o)"/>
   <text class="muted" x="216" y="378">owns</text>
