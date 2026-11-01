@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" role="img" aria-labelledby="t">
+  <title id="t">A top-up saga: Authorise card in Payments, Credit wallet in Wallets, Capture card in Payments, Post to ledger in Ledger, then Completed. If the wallet credit is rejected, the compensating step Void authorisation in Payments runs and the saga ends as Failed. A note says that from the wallet credit on, steps are retried, never compensated</title>
+  <style>
+    text { font-family: ui-monospace, "SFMono-Regular", Consolas, Menlo, monospace; fill: #ebf1ff; font-size: 14px; }
+    .muted { fill: #9baeca; font-size: 12px; }
+    .bad { fill: #fca5a5; font-size: 12px; }
+    .box { fill: #13233b; stroke: #3a4d6b; stroke-width: 1.5; }
+    .hl { fill: #13233b; stroke: #7dd3fc; stroke-width: 2; }
+    .badbox { fill: #2a1620; stroke: #f87171; stroke-width: 1.5; }
+    .ptr { fill: none; stroke: #7dd3fc; stroke-width: 1.75; }
+    .badptr { fill: none; stroke: #f87171; stroke-width: 1.75; stroke-dasharray: 5 4; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7dd3fc"/>
+    </marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f87171"/>
+    </marker>
+  </defs>
+  <rect width="800" height="300" fill="#08111f"/>
+
+  <text class="muted" x="400" y="34" text-anchor="middle">Each box is a local transaction in one service; the saga's state is persisted between steps.</text>
+
+  <rect class="box" x="20" y="64" width="140" height="56" rx="6"/>
+  <text x="90" y="88" text-anchor="middle">Authorise card</text>
+  <text class="muted" x="90" y="108" text-anchor="middle">Payments</text>
+  <rect class="box" x="176" y="64" width="140" height="56" rx="6"/>
+  <text x="246" y="88" text-anchor="middle">Credit wallet</text>
+  <text class="muted" x="246" y="108" text-anchor="middle">Wallets</text>
+  <rect class="box" x="332" y="64" width="140" height="56" rx="6"/>
+  <text x="402" y="88" text-anchor="middle">Capture card</text>
+  <text class="muted" x="402" y="108" text-anchor="middle">Payments</text>
+  <rect class="box" x="488" y="64" width="140" height="56" rx="6"/>
+  <text x="558" y="88" text-anchor="middle">Post to ledger</text>
+  <text class="muted" x="558" y="108" text-anchor="middle">Ledger</text>
+  <rect class="hl" x="644" y="64" width="136" height="56" rx="6"/>
+  <text x="712" y="97" text-anchor="middle">Completed</text>
+
+  <path class="ptr" d="M160 92 H172" marker-end="url(#a)"/>
+  <path class="ptr" d="M316 92 H328" marker-end="url(#a)"/>
+  <path class="ptr" d="M472 92 H484" marker-end="url(#a)"/>
+  <path class="ptr" d="M628 92 H640" marker-end="url(#a)"/>
+
+  <path class="badptr" d="M246 120 V196" marker-end="url(#r)"/>
+  <text class="bad" x="256" y="164">wallet credit rejected</text>
+
+  <rect class="box" x="156" y="200" width="180" height="64" rx="6"/>
+  <text x="246" y="224" text-anchor="middle">Void authorisation</text>
+  <text class="muted" x="246" y="242" text-anchor="middle">Payments</text>
+  <text class="muted" x="246" y="258" text-anchor="middle">compensation</text>
+  <rect class="badbox" x="390" y="212" width="120" height="40" rx="6"/>
+  <text x="450" y="237" text-anchor="middle">Failed</text>
+  <path class="badptr" d="M336 232 H386" marker-end="url(#r)"/>
+
+  <text class="muted" x="660" y="224" text-anchor="middle">from the credit on:</text>
+  <text class="muted" x="660" y="242" text-anchor="middle">retry, never compensate</text>
+</svg>
