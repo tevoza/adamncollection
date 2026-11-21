@@ -511,7 +511,16 @@ blockquote {
   }
 }
 
-@media (max-width: 720px) {
+/* Phones in landscape are wider than the mobile breakpoint but only ~400px
+   tall, so a pinned header would eat a third of the screen. Let it scroll
+   away there too. */
+@media (max-height: 540px) {
+  .site-header {
+    position: static;
+  }
+}
+
+@media (max-width: 720px), (max-height: 540px) {
   .post-content :is(h2, h3) {
     scroll-margin-top: 1rem;
   }
