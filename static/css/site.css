@@ -187,6 +187,21 @@ blockquote {
   max-width: none;
 }
 
+/* A table can't shrink below its longest unbreakable cell (identifiers like
+   model_context_window_exceeded), and on a portrait phone that pushed the
+   whole page wider than the screen. Scroll the table inside the card instead. */
+.post-content > table {
+  display: block;
+  overflow-x: auto;
+}
+
+/* Long unbroken words — inline call chains, API names in footnote titles —
+   did the same. Break them only when they would otherwise overflow; code
+   blocks keep scrolling. */
+.post-content {
+  overflow-wrap: break-word;
+}
+
 .eyebrow,
 .post-meta {
   margin: 0 0 0.75rem;
