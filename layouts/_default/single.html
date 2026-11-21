@@ -1,4 +1,13 @@
 {{ define "main" }}
+  {{- /* Show a contents sidebar when the post has headings; `toc: false` in front matter opts out. */ -}}
+  {{ $toc := and (ne .Params.toc false) (gt (len .Fragments.Headings) 0) }}
+  {{ if $toc }}
+  <div class="post-layout">
+    <details class="toc" open>
+      <summary>Contents</summary>
+      {{ .TableOfContents }}
+    </details>
+  {{ end }}
   <article class="post">
     <header class="post-header">
       {{ with .CurrentSection }}
@@ -39,4 +48,33 @@
       {{ .Content }}
     </div>
   </article>
+  {{ if $toc }}
+  </div>
+  <script>
+    (() => {
+      const toc = document.querySelector(".toc");
+      // Start collapsed on narrow screens, where the list sits above the post.
+      if (matchMedia("(max-width: 1100px)").matches) toc.open = false;
+
+      // Highlight the section currently being read.
+      const links = new Map(
+        [...toc.querySelectorAll("a[href^='#']")].map((a) => [decodeURIComponent(a.hash.slice(1)), a])
+      );
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            toc.querySelector("a.active")?.classList.remove("active");
+            links.get(entry.target.id)?.classList.add("active");
+          }
+        },
+        { rootMargin: "-15% 0px -70% 0px" }
+      );
+      for (const id of links.keys()) {
+        const heading = document.getElementById(id);
+        if (heading) observer.observe(heading);
+      }
+    })();
+  </script>
+  {{ end }}
 {{ end }}
